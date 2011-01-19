@@ -8,7 +8,7 @@ if(!this.JSON){this.JSON={};}(function(){function f(n){return n<10?'0'+n:n;}if(t
 
 var $ = jQuery;
 if(window.localStorage && window.sessionStorage){
-	$.webshims.isReady('json-storage', true);
+	$.webshims.createReadyEvent('json-storage');
 }
 })();
 
@@ -190,7 +190,7 @@ if (!window.sessionStorage) {window.sessionStorage = new Storage('session');}
 	$.webshims.localStorageSwfCallback = function(type){
 		clearTimeout(swfTimer);
 		if(window.localStorage){
-			$.webshims.isReady('json-storage', true);
+			$.webshims.createReadyEvent('json-storage');
 			return;
 		}
 		
@@ -228,7 +228,7 @@ if (!window.sessionStorage) {window.sessionStorage = new Storage('session');}
 		if(!window.localStorage){
 			window.localStorage = new Storage('local');
 		}
-		$.webshims.isReady('json-storage', true);
+		$.webshims.createReadyEvent('json-storage');
 	};
 	
 	jQuery.webshims.swfLocalStorage = {

@@ -7,7 +7,7 @@
 	<link rel="stylesheet" href="qunit/qunit.css" media="screen">
 	
 	<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.4.4/jquery.js"></script>
-	<script src="../src/extras/modernizr-1.6.min.js"></script>
+	
 	<script src="qunit/qunit.js"></script>
 	
 	<script src="../src/polyfiller.js"></script>
@@ -26,19 +26,11 @@
 			if(hash.indexOf('overrideValidationMessages') !== -1){
 				$.webshims.overrideValidationMessages = true; 
 			}
-			if(hash.indexOf('customValidationMessage') !== -1){
-				$.webshims.implement.customValidationMessage = true; 
-			}
-			if(hash.indexOf('extendNative') !== -1){
-				$.webshims.cfg.extendNative = true; 
-			}
-			
 						
 			$(function(){
 				$('#bugfixes').attr('checked', !!window.noHTMLExtFixes);
-				$('#customValidationMessage').attr('checked', !!$.webshims.implement.customValidationMessage);
 				$('#overrideValidationMessages').attr('checked', !!$.webshims.overrideValidationMessages);
-				$('#extendNative').attr('checked', !!$.webshims.cfg.extendNative);
+				$('#extendNative').attr('checked', !!$.webshims.extendNative);
 				$('input.webshim-config')
 					.bind('click', function(){
 						var addHash = '';
@@ -65,7 +57,7 @@
 			
 			module("init");
 			asyncTest("init", function(){
-				$.webshims.ready('DOM forms canvas json-storage', start);
+				$.webshims.ready('ready forms canvas json-storage', start);
 			});
 			
 		})(jQuery);
@@ -73,7 +65,7 @@
 	
 	<script>
 		//polute unknown elements prototype with some used props currently output[value]
-		jQuery.webshims.ready('dom-extend', function($){
+		jQuery.webshims.ready('es5', function($){
 			$.webshims.defineNodeNameProperty('foobar', 'value', {
 				get: function(){
 					return 'jo da foobar';
@@ -101,6 +93,7 @@
 		(function($){
 //			$.webshims.debug = true;
 			$(window).load(function(){
+				$.webshims.loader.basePath += 'shims/';
 				$.webshims.polyfill();
 			});
 		})(jQuery);
@@ -120,8 +113,6 @@
 <div>
 	<input type="checkbox" id="bugfixes" value="noCapableBugfixes" class="webshim-config" /> <label for="bugfixes"><strong>without</strong> (capable browser) bugfixes</label>
 	<input type="checkbox" id="overrideValidationMessages" value="overrideValidationMessages" class="webshim-config" /> <label for="overrideValidationMessages">overrideValidationMessages</label>
-	<input type="checkbox" id="customValidationMessage" value="customValidationMessage" class="webshim-config" /> <label for="customValidationMessage">customValidationMessage</label>
-	<input type="checkbox" id="extendNative" value="extendNative" class="webshim-config" /> <label for="extendNative">extendNative</label>
 </div>
 <small>Note: These tests are made to test webshims lib implementation. If there are some failling tests in native implementations, fill a browser bug. We currently only fix heavy/easy to fix errors in native implementations.</small>
 <h1 id="qunit-header">Webshims Lib Test Suite</h1>

@@ -69,11 +69,11 @@ asyncTest("stepup", function(){
 			}
 		], function(i, testItem){
 			stepTest(testItem);
-		});
+		})
 	}
 	
 	
-	$.webshims.ready('DOM forms-ext', function(){
+	$.webshims.ready('ready forms-ext', function(){
 		start();
 	});
 });

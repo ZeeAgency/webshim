@@ -1,4 +1,4 @@
-jQuery.webshims.ready('form-core dom-extend', function($, webshims, window, doc, undefined){
+jQuery.webshims.ready('form-core', function($, webshims, window, doc, undefined){
 	"use strict";
 	var validityMessages = webshims.validityMessages;
 	var support = $.support;
@@ -45,7 +45,7 @@ jQuery.webshims.ready('form-core dom-extend', function($, webshims, window, doc,
 	};
 	
 	var currentValidationMessage =  validityMessages[''];
-	$(doc).bind('webshimLocalizationReady', function(){
+	$(doc).bind('htmlExtLangChange', function(){
 		webshims.activeLang(validityMessages, 'form-message', function(langObj){
 			currentValidationMessage = langObj;
 		});
@@ -74,36 +74,32 @@ jQuery.webshims.ready('form-core dom-extend', function($, webshims, window, doc,
 		implementProperties.push('validationMessage');
 	}
 	
-	implementProperties.forEach(function(messageProp){
-		['input', 'select', 'textarea', 'fieldset', 'output', 'button'].forEach(function(nodeName){
-			var desc = webshims.defineNodeNameProperty(nodeName, messageProp, {
-				get: function(){
-					var elem = this;
-					var message = '';
-					if(!$.attr(elem, 'willValidate')){
-						return message;
-					}
-					var validity = $.attr(elem, 'validity') || {valid: 1};
-					if(validity.valid){return message;}
-					message = elem.getAttribute('x-moz-errormessage') || elem.getAttribute('data-errormessage') || '';
+	$.each(implementProperties, function(i, messageProp){
+		webshims.defineNodeNamesProperty(['input', 'select', 'textarea', 'fieldset', 'output'], messageProp, {
+			get: function(elem){
+				var message = '';
+				if(!$.attr(elem, 'willValidate')){
+					return message;
+				}
+				var validity = $.attr(elem, 'validity') || {valid: 1};
+				if(validity.valid){return message;}
+				message = elem.getAttribute('x-moz-errormessage') || elem.getAttribute('data-errormessage') || '';
+				if(message){return message;}
+				if(validity.customError && elem.nodeName){
+					message = ('validationMessage' in elem) ? elem.validationMessage : $.data(elem, 'customvalidationMessage');
 					if(message){return message;}
-					if(validity.customError && elem.nodeName){
-						message = (support.validationMessage && desc._supget) ? desc._supget.call(elem) : $.data(elem, 'customvalidationMessage');
-						if(message){return message;}
+				}
+				$.each(validity, function(name, prop){
+					if(name == 'valid' || !prop){return;}
+					message = webshims.createValidationMessage(elem, name);
+					if(message){
+						return false;
 					}
-					$.each(validity, function(name, prop){
-						if(name == 'valid' || !prop){return;}
-						message = webshims.createValidationMessage(elem, name);
-						if(message){
-							return false;
-						}
-					});
-					return message || '';
-				},
-				set: $.noop
-			}, (messageProp == 'validationMessage'), 'validity-base', 'form-message');
+				});
+				return message || '';
+			},
+			set: $.noop
 		});
 		
 	});
-	webshims.isReady('form-message', true);
-});
+}, true);

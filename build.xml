@@ -13,11 +13,9 @@
     <target name="WebExtlib">
     	<!-- first we create some feature combinations, to minimize http-requests -->
 		
-		
 		<!-- good for FF3.6 -->
 		<concat destfile="${shims}/combined-ff3.js">
 			<fileset file="${shims}/es5-1.js" />
-			<fileset file="${shims}/dom-extend.js" />
             <fileset file="${shims}/form-core.js" />
 			<fileset file="${shims}/form-message.js" />
             <fileset file="${shims}/form-shim-extend.js" />
@@ -31,7 +29,6 @@
 		<!-- good for FF3.6 -->
 		<concat destfile="${shims}/combined-ff3-light.js">
 			<fileset file="${shims}/es5-1.js" />
-			<fileset file="${shims}/dom-extend.js" />
            	<fileset file="${shims}/form-core.js" />
 			<fileset file="${shims}/form-message.js" />
             <fileset file="${shims}/form-shim-extend.js" />
@@ -41,7 +38,6 @@
 		
 		<!-- good for FF4.x -->
 		<concat destfile="${shims}/combined-ff4.js">
-			<fileset file="${shims}/dom-extend.js" />
             <fileset file="${shims}/form-core.js" />
 			<fileset file="${shims}/form-message.js" />
             <fileset file="${shims}/form-native-extend.js" />
@@ -52,7 +48,6 @@
 		<!-- good for Safari5, Chrome 9- and Opera 11- -->
 		<concat destfile="${shims}/combined-webkit.js">
 			<fileset file="${shims}/es5-1.js" />
-			<fileset file="${shims}/dom-extend.js" />
             <fileset file="${shims}/form-core.js" />
 			<fileset file="${shims}/form-message.js" />
             <fileset file="${shims}/form-native-extend.js" />
@@ -61,7 +56,6 @@
 		
 		<!-- good for ie9 -->
 		<concat destfile="${shims}/combined-ie9.js">
-			<fileset file="${shims}/dom-extend.js" />
             <fileset file="${shims}/geolocation.js" />
             <fileset file="${shims}/form-core.js" />
 			<fileset file="${shims}/form-message.js" />
@@ -74,7 +68,6 @@
 		
 		<!-- good for ie9 -->
 		<concat destfile="${shims}/combined-ie9-light.js">
-			<fileset file="${shims}/dom-extend.js" />
             <fileset file="${shims}/geolocation.js" />
             <fileset file="${shims}/form-core.js" />
 			<fileset file="${shims}/form-message.js" />
@@ -89,6 +82,7 @@
 			<fileset file="${shims}/es5-1.js" />
 			<fileset file="${shims}/es5-2.js" />
             <fileset file="${shims}/combined-ie9.js" />
+            <fileset file="${shims}/canvas.js" />
         </concat>
 		
 		<!-- good for ie8 -->
@@ -97,6 +91,7 @@
 			<fileset file="${shims}/es5-1.js" />
 			<fileset file="${shims}/es5-2.js" />
             <fileset file="${shims}/combined-ie9-light.js" />
+            <fileset file="${shims}/canvas.js" />
         </concat>
 		
 		<!-- good for ie6/ie7 -->

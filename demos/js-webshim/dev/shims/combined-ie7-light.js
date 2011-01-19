@@ -193,18 +193,12 @@ if((!supportDefineDOMProp || !Object.create || !Object.defineProperties || !Obje
 		return proto;
 	};
 	
-	shims.getPrototypeOf = function (object) {
-        return Object.getPrototypeOf && Object.getPrototypeOf(object) || object.__proto__ || object.constructor && object.constructor.prototype;
-    };
-	
 	//based on http://www.refactory.org/s/object_getownpropertydescriptor/view/latest 
 	shims.getOwnPropertyDescriptor = function(obj, prop){
-		if (typeof obj !== "object" && typeof obj !== "function" || obj === null){
-            throw new TypeError("Object.getOwnPropertyDescriptor called on a non-object");
-		}
 		var descriptor;
 		if(Object.defineProperty && Object.getOwnPropertyDescriptor){
 			try{
+				//IE8
 				descriptor = Object.getOwnPropertyDescriptor(obj, prop);
 				return descriptor;
 			} catch(e){}
@@ -790,494 +784,7 @@ if (!String.prototype.trim) {
 }
 
 })();
-//DOM-Extension helper
-jQuery.webshims.ready('es5', function($, webshims, window, document, undefined){
-	//shortcus
-	var support = $.support;
-	var modules = webshims.modules;
-	var has = Object.prototype.hasOwnProperty;
-	var unknown = $.webshims.getPrototypeOf(document.createElement('foobar'));
-	var htcTest;
-	
-	
-	//proxying attribute
-	var oldAttr = $.attr;
-	var extendedProps = {};
-	var modifyProps = {};
-		
-	$.attr = function(elem, name, value, arg1, arg3){
-		var nodeName = (elem.nodeName || '').toLowerCase();
-		if(!nodeName || elem.nodeType !== 1){return oldAttr(elem, name, value, arg1, arg3);}
-		var desc = extendedProps[nodeName];
-		var handeld;
-		var ret;
-		var getSetData;
-						
-		if(desc){
-			desc = desc[name];
-		}
-		if(!desc){
-			desc = extendedProps['*'];
-			if(desc){
-				desc = desc[name];
-			}
-		}
-		
-		// we got a winner
-		if(desc){
-			//getSetData is used for IE8-, to block infinite loops + autointit of DHTML behaviors 
-			getSetData = $.data(elem, '_polyfillblockProperty') || $.data(elem, '_polyfillblockProperty', {get: {}, set: {}, contentInit: {}});
-			if(value === undefined){
-				if(getSetData.get[name]){return;}
-				getSetData.get[name] = true;
-				ret = (desc.get) ? desc.get.call(elem) : desc.value;
-				getSetData.get[name] = false;
-				return ret;
-			} else if(desc.set) {
-				if(getSetData.set[name]){return;}
-				getSetData.set[name] = true;
-				if(elem.readyState === 'loading' && !getSetData.contentInit && !getSetData.get[name] && desc.get && value === webshims.contentAttr(elem, name)){
-					getSetData.contentInit = true;
-					value = desc.get.call(elem);
-				}
-				ret = desc.set.call(elem, value);
-				handeld = true;
-				getSetData.set[name] = false;
-			}
-		}
-		if(!handeld){
-			ret = oldAttr(elem, name, value, arg1, arg3);
-		}
-		if(value !== undefined && modifyProps[nodeName] && modifyProps[nodeName][name]){
-			$.each(modifyProps[nodeName][name], function(i, fn){
-				fn.call(elem, value);
-			});
-		}
-		return ret;
-	};
-	
-	var extendQAttr =  function(nodeName, prop, desc){
-		if(!extendedProps[nodeName]){
-			extendedProps[nodeName] = {};
-		}
-		var oldDesc = extendedProps[nodeName][prop];
-		var getSup = function(propType, descriptor, oDesc){
-			if(descriptor && descriptor[propType]){
-				return descriptor[propType];
-			}
-			if(oDesc && oDesc[propType]){
-				return oDesc[propType];
-			}
-			return function(value){
-				return oldAttr(this, prop, value);
-			};
-		};
-		extendedProps[nodeName][prop] = desc;
-		if(desc.value === undefined){
-			if(!desc.set){
-				desc.set = desc.writeable ? getSup('set', desc, oldDesc) : function(){throw(prop +'is readonly on '+ nodeName);};
-			}
-			if(!desc.get){
-				desc.get = getSup('get', desc, oldDesc);
-			}
-			
-		}
-		
-		$.each(['value', 'get', 'set'], function(i, descProp){
-			if(desc[descProp]){
-				desc['_sup'+descProp] = getSup(descProp, oldDesc);
-			}
-		});
-	};
-	
-	(function(){
-		var preloadElem = document.createElement('span');
-		var preloadStyle = preloadElem.style;
-		var preloaded = {};
-		
-		var processPreload = function(preload){
-			preload.props.forEach(function(htcFile){
-				if(preloaded[htcFile]){return;}
-				preloaded[htcFile] = true;
-				preloadStyle.behavior += ', '+htcFile;
-				if(preload.feature && preloadElem.readyState != 'complete'){
-					webshims.waitReady(preload.feature);
-					$(preloadElem).one('readystatechange', function(){
-						webshims.unwaitReady(preload.feature);
-					});
-				}
-			});
-		};
-//		webshims.preloadHTCs.forEach(processPreload);
-		webshims.preloadHTCs = {push: processPreload};
-	})();
-	
-	// resetting properties with magic content attributes
-	var initProp = (function(){
-		
-		var initProps = {};
-		
-		var isReady;
-		webshims.addReady(function(context, contextElem){
-			var nodeNameCache = {};
-			var getElementsByName = function(name){
-				if(!nodeNameCache[name]){
-					nodeNameCache[name] = $(context.getElementsByTagName(name));
-					if(contextElem[0] && $.nodeName(contextElem[0], name)){
-						nodeNameCache[name] = nodeNameCache[name].add(contextElem);
-					}
-				}
-			};
-			
-			
-			$.each(initProps, function(name, fns){
-				getElementsByName(name);
-				fns.forEach(function(fn){
-					nodeNameCache[name].each(fn);
-				});
-			});
-			nodeNameCache = null;
-			isReady = true;
-		});
-		
-
-		var createNodeNameInit = function(nodeName, fn){
-			if(!initProps[nodeName]){
-				initProps[nodeName] = [fn];
-			} else {
-				initProps[nodeName].push(fn);
-			}
-			if(isReady){
-				$( document.getElementsByTagName(nodeName) ).each(fn);
-			}
-		};
-		
-		var elementExtends = {};
-		var loadedDHTMLFiles = {};
-		return {
-			extend: function(nodeName, prop, desc){
-				if(!elementExtends[prop]){
-					elementExtends[prop] = 0;
-				}
-				elementExtends[prop]++;
-				createNodeNameInit(nodeName, function(){
-					transformDescriptor(this, prop, desc, '_sup'+ prop + elementExtends[prop]);
-					webshims.defineProperty(this, prop, desc);
-				});
-			},
-			extendDHTML: function(nodeName, htcFile, prop, feature){
-				webshims.preloadHTCs.push({feature: feature, props: [htcFile]});
-				if(!loadedDHTMLFiles[nodeName]){
-					loadedDHTMLFiles[nodeName] = '';
-				}
-				if(loadedDHTMLFiles[nodeName].indexOf(htcFile) != -1){return;}
-				loadedDHTMLFiles[nodeName] += htcFile;
-				createNodeNameInit(nodeName, function(){
-					var behavior = this.style.behavior;
-					this.style.behavior += behavior ? ', '+htcFile : htcFile;
-				});
-			},
-			init: function(nodeName, prop, all){
-				createNodeNameInit(nodeName, function(){
-					var jElm = $(this);
-					if(all !== 'all'){
-						jElm = jElm.filter('['+ prop +']');
-					}
-					jElm.attr(prop, function(i, val){
-						return val;
-					});
-				});
-			}
-		};
-	})();
-	
-	
-	var transformDescriptor = function(proto, prop, desc, elementID){
-		var oDesc;
-		
-		var getSup = function(descriptor, accessType){
-			if(descriptor && descriptor[accessType]){
-				return descriptor[accessType];
-			}
-			
-			if(descriptor.value !== undefined){
-				//if original is a value, but we use an accessor
-				if(accessType == 'set'){
-					return(elementID) ? function(val){$.data(proto, elementID).value = val;} : function(val){descriptor.value = val;};
-				}
-				if(accessType == 'get'){
-					return (elementID) ? function(){return $.data(proto, elementID).value;} : function(){return descriptor.value;};
-				}
-			}
-			return function(value){
-				return webshims.contentAttr(this, prop, value);
-			};
-		};
-		
-		if(proto && prop){
-			
-			while(proto && prop in proto && !has.call(proto, prop)){
-				proto = webshims.getPrototypeOf(proto);
-			}
-			
-			oDesc = webshims.getOwnPropertyDescriptor(proto, prop) || {configurable: true};
-			
-			if(!oDesc.configurable && !oDesc.writeable){return false;}
-			if(elementID){
-				$.data(proto, elementID, oDesc);
-			}
-			if(desc.get){
-				desc._supget = getSup(oDesc, 'get');
-			}
-			if(desc.set){
-				desc._supset = getSup(oDesc, 'set');
-			}
-			if(desc.value || oDesc.value !== undefined){
-				desc._supvalue = oDesc.value;
-			}
-		}
-		
-		if(desc.value === undefined){
-			if(!desc.set){
-				desc.set =  desc._supset || (!desc.writeable) ? function(){throw(prop +'is readonly on '+ this.nodeName);} : getSup(desc, 'set');
-			}
-			if(!desc.get){
-				desc.get = desc._supget || getSup(desc, 'get');
-			}
-		}
-		
-		
-		return true;
-	};
-	
-	$.extend(webshims, {
-		waitReady: function(name){
-			webshims.waitReadys[name] = webshims.waitReadys[name] || 0;
-			webshims.waitReadys[name]++;
-		},
-		unwaitReady: function(name){
-			webshims.waitReadys[name] = webshims.waitReadys[name] || 1;
-			webshims.waitReadys[name]--;
-			if(webshims.waitReadys[name+'ReadyCall'] && !webshims.waitReadys[name]){
-				webshims.isReady(name, true);
-			}
-		},
-		defineNodeNameProperty: function(nodeName, prop, desc, extend, htc, feature){
-			desc = $.extend({writeable: true}, desc);
-			var oDesc;
-			var extendedNative = false;
-			var htcHandled;
-			if(webshims.cfg.extendNative && extend){
-				(function(){
-					var element = document.createElement(nodeName);
-					if(support.objectAccessor && support.contentAttr && unknown){
-						//ToDo extend property on all elements
-						
-						var proto  = webshims.getPrototypeOf(element);
-						
-						
-						
-						//extend property on unknown elements
-						if(unknown === proto){
-							initProp.extend(nodeName, prop, desc);
-							extendedNative = true;
-							return;
-						}
-						
-						//extend unknown property on known elements prototype
-						if(!(prop in element)){
-							transformDescriptor(false, false, desc);
-							webshims.defineProperty(proto, prop, desc);
-							extendedNative = true;
-							return;
-						}
-						//extend known property on element itself
-						if(has.call(element, prop)){
-							oDesc = webshims.getOwnPropertyDescriptor(element, prop);
-							
-							//abort can not extend native!
-							if(!oDesc.configurable){return;}
-							
-							initProp.extend(nodeName, prop, desc);
-							extendedNative = true;
-							return;
-						}
-						
-						//abort can not extend native!
-						if(!transformDescriptor(proto, prop, desc)){return;}
-						//extend known property on known elements prototype
-						webshims.defineProperty(proto, prop, desc);
-						extendedNative = true;
-						return;
-					} else if(desc.value !== undefined){
-						initProp.extend(nodeName, prop, desc);
-						extendedNative = true;
-						return;
-					} 
-					if(htc && support.dhtmlBehavior && !(prop in element)){
-						extendedNative = true;
-						htcHandled = true;
-						extendQAttr(nodeName, prop, desc);
-						initProp.extendDHTML(nodeName, 'url('+webshims.loader.makePath( 'htc/'+ (typeof htc == 'string' ? htc : prop) +'.htc') +')' , prop, feature);
-						return;
-					}
-				})();
-			}
-			if(!extendedNative){
-				if(extend && webshims.cfg.extendNative){
-					webshims.log("could not extend "+ nodeName +"["+ prop +"] fallback to jQuery extend");
-				}
-				extendQAttr(nodeName, prop, desc);
-			}
-			if(!htcTest && webshims.debug && extend && webshims.cfg.extendNative && htc){
-				htcTest = true;
-				$.ajax({
-					url: webshims.loader.makePath( 'htc/'+ (typeof htc == 'string' ? htc : prop) +'.htc'),
-					complete: function(xhr){
-						if(xhr.getResponseHeader){
-							var type = xhr.getResponseHeader('Content-Type') || '';
-							if(type != 'text/x-component'){
-								webshims.warn('content-type of htc-files should be "text/x-component", but was "'+ type +'"');
-								webshims.info('you should also let the client cache htc-files. use a proper expire header for htc-files');
-							}
-							if(type.indexOf('text/') !== 0){
-								webshims.warn('Error: content-type of htc-files is not text, this can not work in IE');
-							}
-						}
-					}
-				});
-			}
-			if((desc.contentAttr && !htcHandled) || desc.init){
-				initProp.init(nodeName, prop);
-			}
-			return desc;
-		},
-		defineNodeNamesProperty: function(names, prop, desc, extend, htc, feature){
-			if(typeof names == 'string'){
-				names = names.split(/\s*,\s*/);
-			}
-			names.forEach(function(nodeName){
-				webshims.defineNodeNameProperty(nodeName, prop, desc, extend, htc, feature);
-			});
-		},
-		onNodeNamesPropertyModify: function(nodeNames, prop, desc){
-			if(typeof nodeNames == 'string'){
-				nodeNames = nodeNames.split(/\s*,\s*/);
-			}
-			if($.isFunction(desc)){
-				desc = {set: desc};
-			}
-			nodeNames.forEach(function(name){
-				if(!modifyProps[name]){
-					modifyProps[name] = {};
-				}
-				if(!modifyProps[name][prop]){
-					modifyProps[name][prop] = [];
-				}
-				if(desc.set){
-					modifyProps[name][prop].push(desc.set);
-				}
-				if(desc.init){
-					initProp.init(name, prop);
-				}
-			});
-		},
-		defineNodeNamesBooleanProperty: function(elementNames, prop, setDesc, extend, htc, feature){
-			var desc = {
-				set: function(val){
-					var elem = this;
-					if(elem.readyState === 'loading' && typeof val == 'string' && val === webshims.contentAttr(this, prop)){
-						val = true;
-					} else {
-						val = !!val;
-					}
-					webshims.contentAttr(elem, prop, val);
-					if(setDesc){
-						setDesc.set.call(elem, val);
-					}
-					
-					return val;
-				},
-				get: function(){
-					return webshims.contentAttr(this, prop) != null;
-				}
-			};
-			webshims.defineNodeNamesProperty(elementNames, prop, desc, extend, htc, feature);
-		},
-		contentAttr: function(elem, name, val){
-			if(!elem.nodeName){return;}
-			if(val === undefined){
-				val = (elem.attributes[name] || {}).value;
-				return (val == null) ? undefined : val;
-			}
-			
-			if(typeof val == 'boolean'){
-				if(!val){
-					elem.removeAttribute(name);
-				} else {
-					elem.setAttribute(name, name);
-				}
-			} else {
-				elem.setAttribute(name, val);
-			}
-		},
-				
-		activeLang: (function(){
-			var langs = [navigator.browserLanguage || navigator.language || ''];
-			var paLang = $('html').attr('lang');
-			var timer;
-			
-			if(paLang){
-				langs.push(paLang);
-			}
-			return function(lang, module, fn){
-				if(lang){
-					if(!module || !fn){
-						if(lang !== langs[0]){
-							langs[0] = lang;
-							clearTimeout(timer);
-							timer = setTimeout(function(){
-								$(document).triggerHandler('webshimLocalizationReady', langs);
-							}, 0);
-						}
-					} else {
-						module = modules[module].options;
-						var langObj = lang,
-							remoteLangs = module && module.availabeLangs,
-							loadRemoteLang = function(lang){
-								if($.inArray(lang, remoteLangs) !== -1){
-									webshims.loader.loadScript(module.langSrc+lang+'.js', function(){
-										if(langObj[lang]){
-											fn(langObj[lang]);
-										}
-									});
-									return true;
-								}
-								return false;
-							}
-						;
-						
-						$.each(langs, function(i, lang){
-							var shortLang = lang.split('-')[0];
-							if(langObj[lang] || langObj[shortLang]){
-								fn(langObj[lang] || langObj[shortLang]);
-								return false;
-							}
-							if(remoteLangs && module.langSrc && (loadRemoteLang(lang) || loadRemoteLang(shortLang))){
-								return false;
-							}
-						});
-					}
-				}
-				return langs;
-			};
-		})()
-	});
-	
-		
-	webshims.isReady('webshimLocalization', true);
-	webshims.isReady('dom-extend', true);
-});(function($){
+(function($){
 	if(navigator.geolocation){return;}
 	var domWrite = function(){
 			setTimeout(function(){
@@ -1440,11 +947,8 @@ jQuery.webshims.ready('es5', function($, webshims, window, document, undefined){
 })(jQuery);
 //todo use $.globalEval?
 jQuery.webshims.gcEval = function(){
-	with(arguments[1] && arguments[1].form || window) {
-		with(arguments[1] || window){
-			return (function(){eval( arguments[0] );}).call(arguments[1] || window, arguments[0]);
-		}
-	}
+	"use strict";
+	return (function(){eval( arguments[0] );}).call(arguments[1] || window, arguments[0]);
 };
 jQuery.webshims.ready('es5', function($, webshims, window, doc, undefined){
 	"use strict";
@@ -1495,7 +999,7 @@ jQuery.webshims.ready('es5', function($, webshims, window, doc, undefined){
 		
 	});
 	//better you use the selectors above
-	['valid', 'invalid', 'required', 'optional'].forEach(function(name){
+	['required', 'valid', 'invalid', 'optional'].forEach(function(name){
 		$.expr.filters[name] = $.expr.filters[name+"-element"];
 	});
 	
@@ -1553,25 +1057,42 @@ jQuery.webshims.ready('es5', function($, webshims, window, doc, undefined){
 	
 	
 	
-	webshims.triggerInlineForm = function(elem, event){
-		var attr = elem['on'+event] || elem.getAttribute('on'+event) || '';
-		var ret;
-		event = $.Event({
-			type: event,
-			target: elem[0],
-			currentTarget: elem[0]
-		});
-		
-		if(attr && typeof attr == 'string'){
-			ret = webshims.gcEval(attr, elem);
-		}
-		if(ret === false){
-			event.stopPropagation();
-			event.preventDefault();
-		}
-		$(elem).trigger(event);
-		return ret;
-	};
+	webshims.triggerInlineForm = (function(){
+		var stringify = function(id){
+			if(typeof id != 'string' || id.indexOf('-') !== -1 || id.indexOf('.') !== -1 || id.indexOf('"') !== -1){return '';}
+			return 'var '+ id +' = this.form["'+ id +'"];';
+		};
+		return function(elem, event){
+			var attr = elem['on'+event] || elem.getAttribute('on'+event) || '';
+			var ret;
+			event = $.Event({
+				type: event,
+				target: elem[0],
+				currentTarget: elem[0]
+			});
+			
+			if(attr && typeof attr == 'string' && elem.form && elem.form.elements){
+				var scope = '';
+				for(var i = 0, elems = elem.form.elements, len = elems.length; i < len; i++ ){
+					var name = elems[i].name;
+					var id = elems[i].id;
+					if(name){
+						scope += stringify(name);
+					}
+					if(id && id !== name){
+						scope += stringify(id);
+					}
+				}
+				ret = webshims.gcEval(scope + attr, elem);
+			}
+			if(ret === false){
+				event.stopPropagation();
+				event.preventDefault();
+			}
+			$(elem).trigger(event);
+			return ret;
+		};
+	})();
 	
 	
 	var setRoot = function(){
@@ -1643,7 +1164,7 @@ jQuery.webshims.ready('es5', function($, webshims, window, doc, undefined){
 				$(doc).bind('focusout.validityalert', boundHide);
 			},
 			getMessage: function(elem, message){
-				$('> span.va-box', alert).text(message || elem.attr('customValidationMessage') || elem.attr('validationMessage'));
+				$('> span.va-box', alert).text(message || elem.attr('x-moz-errormessage') || elem.attr('data-errormessage') || elem.attr('validationMessage'));
 			},
 			position: function(elem){
 				var offset = elem.offset();
@@ -1718,12 +1239,49 @@ jQuery.webshims.ready('es5', function($, webshims, window, doc, undefined){
 		});
 	})();
 	
-	webshims.isReady('form-core', true);
-});
+	(function(){
+		if(!support.validity || window.noHTMLExtFixes || support.fieldsetValidation){return;}
+		//safari 5.0.2 has serious issues with checkValidity in combination with setCustomValidity so we mimic checkValidity using validity-property (webshims.fix.checkValidity)
+		var checkValidity = function(elem){
+			var valid = ($.attr(elem, 'validity') || {valid: true}).valid;
+			if(!valid && elem.checkValidity && elem.checkValidity()){
+				$(elem).trigger('invalid');
+			}			
+			return valid;
+		};
+		var checkElems = ['fieldset'];
+		//safari has a stupid bug ToDo: make proper test for safari bug
+		if(!support.output){
+			checkElems = ['input', 'textarea', 'select', 'form', 'fieldset'];
+		}
+		
+		webshims.defineNodeNamesProperty(checkElems, 'checkValidity', {
+			value: function(){
+				if(this.elements || $.nodeName(this, 'fieldset')){
+					var ret = true;
+					$(this.elements || 'input, textarea, select', this)
+						.each(function(){
+							 if(!checkValidity(this)){
+								ret = false;
+							}
+						})
+					;
+					return ret;
+				} else if(this.checkValidity){
+					return checkValidity(this);
+				}
+			}
+		});
+		
+	})();
+	
+	
+	webshims.createReadyEvent('form-core');
+}, true);
 
 
 
-jQuery.webshims.ready('form-core dom-extend', function($, webshims, window, doc, undefined){
+jQuery.webshims.ready('form-core', function($, webshims, window, doc, undefined){
 	"use strict";
 	var validityMessages = webshims.validityMessages;
 	var support = $.support;
@@ -1770,7 +1328,7 @@ jQuery.webshims.ready('form-core dom-extend', function($, webshims, window, doc,
 	};
 	
 	var currentValidationMessage =  validityMessages[''];
-	$(doc).bind('webshimLocalizationReady', function(){
+	$(doc).bind('htmlExtLangChange', function(){
 		webshims.activeLang(validityMessages, 'form-message', function(langObj){
 			currentValidationMessage = langObj;
 		});
@@ -1799,39 +1357,35 @@ jQuery.webshims.ready('form-core dom-extend', function($, webshims, window, doc,
 		implementProperties.push('validationMessage');
 	}
 	
-	implementProperties.forEach(function(messageProp){
-		['input', 'select', 'textarea', 'fieldset', 'output', 'button'].forEach(function(nodeName){
-			var desc = webshims.defineNodeNameProperty(nodeName, messageProp, {
-				get: function(){
-					var elem = this;
-					var message = '';
-					if(!$.attr(elem, 'willValidate')){
-						return message;
-					}
-					var validity = $.attr(elem, 'validity') || {valid: 1};
-					if(validity.valid){return message;}
-					message = elem.getAttribute('x-moz-errormessage') || elem.getAttribute('data-errormessage') || '';
+	$.each(implementProperties, function(i, messageProp){
+		webshims.defineNodeNamesProperty(['input', 'select', 'textarea', 'fieldset', 'output'], messageProp, {
+			get: function(elem){
+				var message = '';
+				if(!$.attr(elem, 'willValidate')){
+					return message;
+				}
+				var validity = $.attr(elem, 'validity') || {valid: 1};
+				if(validity.valid){return message;}
+				message = elem.getAttribute('x-moz-errormessage') || elem.getAttribute('data-errormessage') || '';
+				if(message){return message;}
+				if(validity.customError && elem.nodeName){
+					message = ('validationMessage' in elem) ? elem.validationMessage : $.data(elem, 'customvalidationMessage');
 					if(message){return message;}
-					if(validity.customError && elem.nodeName){
-						message = (support.validationMessage && desc._supget) ? desc._supget.call(elem) : $.data(elem, 'customvalidationMessage');
-						if(message){return message;}
+				}
+				$.each(validity, function(name, prop){
+					if(name == 'valid' || !prop){return;}
+					message = webshims.createValidationMessage(elem, name);
+					if(message){
+						return false;
 					}
-					$.each(validity, function(name, prop){
-						if(name == 'valid' || !prop){return;}
-						message = webshims.createValidationMessage(elem, name);
-						if(message){
-							return false;
-						}
-					});
-					return message || '';
-				},
-				set: $.noop
-			}, (messageProp == 'validationMessage'), 'validity-base', 'form-message');
+				});
+				return message || '';
+			},
+			set: $.noop
 		});
 		
 	});
-	webshims.isReady('form-message', true);
-});jQuery.webshims.ready('form-core dom-extend', function($, webshims, window){
+}, true);jQuery.webshims.ready('form-core', function($, webshims, window){
 if($.support.validity){
 	return;
 }
@@ -1954,7 +1508,7 @@ webshims.defineNodeNamesProperty(['input', 'textarea', 'select', 'form', 'fields
 		};
 		return function(){
 			unhandledInvalids = false;
-			if($.nodeName(this, 'form')){
+			if($.nodeName(this, 'form') || $.nodeName(this, 'fieldset')){
 				var ret = true,
 					elems = this.elements || $( 'input, textarea, select', this);
 				
@@ -1964,20 +1518,20 @@ webshims.defineNodeNamesProperty(['input', 'textarea', 'select', 'form', 'fields
 					}
 				}
 				return ret;
-			} else if(this.form && !$.nodeName(this, 'fieldset')){
+			} else if(this.form){
 				return testValidity(this);
 			} else {
 				return true;
 			}
 		};
 	})()
-}, true);
+});
 
-webshims.defineNodeNamesProperty(['input', 'textarea', 'select', 'fieldset', 'button', 'output'], 'setCustomValidity', {
+webshims.defineNodeNamesProperty(['input', 'textarea', 'select'], 'setCustomValidity', {
 	value: function(error){
 		$.data(this, 'customvalidationMessage', ''+error);
 	}
-}, true);
+});
 
 
 $.event.special.invalid = {
@@ -2017,6 +1571,70 @@ $.event.special.invalid = {
 	}
 };
 
+// IDLs for constrain validation API
+webshims.defineNodeNamesProperty(['input', 'select', 'textarea'], 'validity', {
+	set: $.noop,
+	get: function(elem){
+		var validityState = $.data(elem, 'cachedValidity');
+		if(validityState){
+			return validityState;
+		}
+		validityState 	= $.extend({}, validiyPrototype);
+		
+		if( !$.attr(elem, 'willValidate') || elem.type == 'submit' ){
+			return validityState;
+		}
+		var jElm 			= $(elem),
+			val				= jElm.val(),
+			cache 			= {nodeName: elem.nodeName.toLowerCase()},
+			ariaInvalid 	= elem.getAttribute('aria-invalid')
+		;
+		
+		validityState.customError = !!($.data(elem, 'customvalidationMessage'));
+		if( validityState.customError ){
+			validityState.valid = false;
+		}
+						
+		$.each(validityRules, function(rule, fn){
+			if (fn(jElm, val, cache)) {
+				validityState[rule] = true;
+				validityState.valid = false;
+			}
+		});
+		elem.setAttribute('aria-invalid',  validityState.valid ? 'false' : 'true');
+		return validityState;
+	}
+});
+
+
+//todo
+webshims.defineNodeNamesBooleanProperty(['input', 'textarea', 'select'], 'required', {
+	set: function(elem, value){
+		elem.setAttribute('aria-required', (value) ? 'true' : 'false');
+	},
+	init: true
+});
+
+webshims.defineNodeNamesProperty(['input', 'select', 'textarea', 'fieldset', 'button', 'output'], 'willValidate', {
+	get: (function(){
+		var types = {
+				button: 1,
+				reset: 1,
+				add: 1,
+				remove: 1,
+				'move-up': 1,
+				'move-down': 1,
+				hidden: 1
+			}
+		;
+		var barredElems = {fieldset: 1, button: 1, output: 1};
+		return function(elem){
+			//elem.name && <- we don't use to make it easier for developers
+			return !!( elem.form && !elem.disabled && !elem.readOnly && !types[elem.type] && !barredElems[(elem.nodeName || '').toLowerCase()] && $.attr(elem.form, 'novalidate') == null );
+		};
+	})()
+}, true, 'form-htc-validity.htc');
+
 
 webshims.addInputType('email', {
 	mismatch: (function(){
@@ -2036,73 +1654,6 @@ webshims.addInputType('url', {
 			return !test.test(val);
 		};
 	})()
-});
-
-// IDLs for constrain validation API
-webshims.defineNodeNamesProperty(['input', 'select', 'textarea', 'fieldset', 'button', 'output'], 'willValidate', {
-	get: (function(){
-		var types = {
-				button: 1,
-				reset: 1,
-				add: 1,
-				remove: 1,
-				'move-up': 1,
-				'move-down': 1,
-				hidden: 1
-			}
-		;
-		var barredElems = {fieldset: 1, button: 1, output: 1};
-		return function(){
-			var elem = this;
-			//elem.name && <- we don't use to make it easier for developers
-			return !!( elem.form && !elem.disabled && !elem.readOnly && !types[elem.type] && !barredElems[(elem.nodeName || '').toLowerCase()] && $.attr(elem.form, 'novalidate') == null );
-		};
-	})()
-}, true, 'validity-base', 'form-extend');
-
-webshims.defineNodeNamesBooleanProperty(['input', 'textarea', 'select'], 'required', {
-	set: function(value){
-		var elem = this;
-		elem.setAttribute('aria-required', (value) ? 'true' : 'false');
-	},
-	contentAttr: true
-}, true, true, 'form-extend');
-
-['input', 'select', 'textarea', 'fieldset', 'button', 'output'].forEach(function(nodeName){
-	webshims.defineNodeNameProperty(nodeName, 'validity', {
-		set: $.noop,
-		get: function(){
-			var elem = this;
-			var validityState = $.data(elem, 'cachedValidity');
-			if(validityState){
-				return validityState;
-			}
-			validityState 	= $.extend({}, validiyPrototype);
-			
-			if( !$.attr(elem, 'willValidate') || elem.type == 'submit' ){
-				return validityState;
-			}
-			var jElm 			= $(elem),
-				val				= jElm.val(),
-				cache 			= {nodeName: elem.nodeName.toLowerCase()},
-				ariaInvalid 	= elem.getAttribute('aria-invalid')
-			;
-			
-			validityState.customError = !!($.data(elem, 'customvalidationMessage'));
-			if( validityState.customError ){
-				validityState.valid = false;
-			}
-							
-			$.each(validityRules, function(rule, fn){
-				if (fn(jElm, val, cache)) {
-					validityState[rule] = true;
-					validityState.valid = false;
-				}
-			});
-			elem.setAttribute('aria-invalid',  validityState.valid ? 'false' : 'true');
-			return validityState;
-		}
-	}, true, 'validity-base', 'form-extend');
 });
 
 var noValidate = function(){
@@ -2153,9 +1704,9 @@ webshims.addReady(function(context, contextElem){
 	
 });
 
-webshims.isReady('form-extend', true);
+webshims.createReadyEvent('form-extend');
 
-}); //webshims.ready end
+}, true); //webshims.ready end
 
 
 
@@ -2168,7 +1719,7 @@ webshims.isReady('form-extend', true);
  */
 
 
-jQuery.webshims.ready('dom-extend', function($, webshims, window, doc, undefined){
+jQuery.webshims.ready('es5', function($, webshims, window, doc, undefined){
 	if($.support.placeholder){return;}
 	var hidePlaceholder = function(elem, data, value){
 			if(elem.type != 'password'){
@@ -2241,7 +1792,6 @@ jQuery.webshims.ready('dom-extend', function($, webshims, window, doc, undefined
 			
 			return {
 				create: function(elem){
-//					alert(elem.value)
 					var data = $.data(elem, 'placeHolder');
 					if(data){return data;}
 					data = $.data(elem, 'placeHolder', {
@@ -2251,13 +1801,6 @@ jQuery.webshims.ready('dom-extend', function($, webshims, window, doc, undefined
 					$(elem).bind('focus.placeholder blur.placeholder', function(e){
 						changePlaceholderVisibility(this, false, false, data, e.type );
 					});
-					if(elem.form){
-						$(elem.form).bind('reset.placeholder', function(e){
-							setTimeout(function(){
-								changePlaceholderVisibility(elem, false, false, data, e.type );
-							}, 0);
-						});
-					}
 					
 					if(elem.type == 'password'){
 						data.box = $(elem)
@@ -2268,7 +1811,7 @@ jQuery.webshims.ready('dom-extend', function($, webshims, window, doc, undefined
 						data.text
 							.insertAfter(elem)
 							.bind('mousedown.placeholder', function(){
-								changePlaceholderVisibility(this, false, false, data, 'focus');
+								changePlaceholderVisibility(this, false, false, data, 'focus' );
 								elem.focus();
 								return false;
 							})
@@ -2301,7 +1844,7 @@ jQuery.webshims.ready('dom-extend', function($, webshims, window, doc, undefined
 							data.box.addClass('placeholder-box-'+cssFloat);
 						}
 					} else {
-						var reset = function(e){
+						var reset = function(){
 							hidePlaceholder(elem, data, '');
 						};
 						if($.nodeName(data.text[0], 'label')){
@@ -2309,7 +1852,7 @@ jQuery.webshims.ready('dom-extend', function($, webshims, window, doc, undefined
 							//ie always exposes last label and ff always first
 							data.text.hide()[$.browser.msie ? 'insertBefore' : 'insertAfter'](elem);
 						}
-						$(window).one('beforeunload', reset);
+						$(window).unload(reset);
 						data.box = $(elem);
 						if(elem.form){
 							$(elem.form).submit(reset);
@@ -2340,29 +1883,26 @@ jQuery.webshims.ready('dom-extend', function($, webshims, window, doc, undefined
 	};
 	
 	webshims.defineNodeNamesProperty(['input', 'textarea'], 'placeholder', {
-		set: function(val){
-			var elem = this;
+		set: function(elem, val){
 			pHolder.update(elem, val);
 		},
 		get: function(elem){
-			return webshims.contentAttr(this, 'placeholder') || '';
+			return webshims.contentAttr(elem, 'placeholder') || '';
 		},
-		contentAttr: true
-	}, true, true, 'form-placeholder');
+		init: true
+	});
 			
 	$.each(['input', 'textarea'], function(i, name){
 		var desc = webshims.defineNodeNameProperty(name, 'value', {
-			set: function(val){
-				var elem = this;
+			set: function(elem, val){
 				var placeholder = webshims.contentAttr(elem, 'placeholder');
 				if(placeholder && 'value' in elem){
 					changePlaceholderVisibility(elem, val, placeholder);
 				}
-				return desc._supset.call(elem, val);
+				return desc.set._polyfilled(elem, val);
 			},
-			get: function(){
-				var elem = this;
-				return $(elem).hasClass('placeholder-visible') ? '' : desc._supget.call(elem);
+			get: function(elem){
+				return $(elem).hasClass('placeholder-visible') ? '' : desc.get._polyfilled(elem);
 			}
 		});
 	});
@@ -2404,9 +1944,9 @@ jQuery.webshims.ready('dom-extend', function($, webshims, window, doc, undefined
 		}
 		return oldVal.apply(this, arguments);
 	};
-	webshims.isReady('form-placeholder', true);
+	
 });
-jQuery.webshims.ready('form-core dom-extend', function($, webshims, window, document, undefined){
+jQuery.webshims.ready('form-core', function($, webshims, window, document, undefined){
 	var doc = document;	
 	
 	(function(){
@@ -2507,20 +2047,30 @@ jQuery.webshims.ready('form-core dom-extend', function($, webshims, window, docu
 		};
 		
 		webshims.defineNodeNameProperty('output', 'value', {
-			set: function(value){
-				var elem = this;
+			set: function(elem, value){
 				var setVal = $.data(elem, 'outputShim');
 				if(!setVal){
 					setVal = outputCreate(elem);
 				}
 				setVal(value);
 			},
-			get: function(){
-				var elem = this;
+			get: function(elem){
 				return webshims.contentAttr(elem, 'value') || $(elem).text() || '';
 			}
-		}, true, 'output-props', 'form-output-datalist');
-				
+		});
+		
+		webshims.onNodeNamesPropertyModify('input', 'value', {
+			set: function(elem, value){
+				var setVal = $.data(elem, 'outputShim');
+				if(setVal){
+					setVal(value);
+					return value;
+				}
+				$(elem).triggerHandler('updateInput');
+			}
+		
+		});
+		
 		webshims.addReady(function(context, contextElem){
 			$('output', context).add(contextElem.filter('output')).each(function(){
 				outputCreate(this);
@@ -2866,16 +2416,14 @@ jQuery.webshims.ready('form-core dom-extend', function($, webshims, window, docu
 		
 		
 		webshims.defineNodeNameProperty('input', 'list', {
-			get: function(){
-				var elem = this;
+			get: function(elem){
 				var val = webshims.contentAttr(elem, 'list');
 				if(typeof val == 'string'){
 					val = document.getElementById(val);
 				}
 				return val || null;
 			},
-			set: function(value){
-				var elem = this;
+			set: function(elem, value){
 				var dom;
 				if(value && value.getAttribute){
 					dom = value;
@@ -2886,12 +2434,11 @@ jQuery.webshims.ready('form-core dom-extend', function($, webshims, window, docu
 					webshims.objectCreate(dataListProto, undefined, {input: elem, id: value, datalist: dom});
 				}
 			},
-			contentAttr: true
-		}, true, 'input-datalist', 'form-output-datalist');
+			init: true
+		});
 		
 		webshims.defineNodeNameProperty('input', 'selectedOption', {
-			get: function(){
-				var elem = this;
+			get: function(elem){
 				var list = $.attr(elem, 'list');
 				var ret = null;
 				var value, options;
@@ -2908,19 +2455,17 @@ jQuery.webshims.ready('form-core dom-extend', function($, webshims, window, docu
 				});
 				return ret;
 			}
-		}, true, 'input-datalist', 'form-output-datalist');
+		});
 			
 		webshims.defineNodeNameProperty('input', 'autocomplete', {
-			get: function(){
-				var elem = this;
+			get: function(elem){
 				var data = $.data(elem, 'datalistWidget');
 				if(data){
 					return data._autocomplete;
 				}
 				return ('autocomplete' in elem) ? elem.autocomplete : elem.getAttribute('autocomplete');
 			},
-			set: function(value){
-				var elem = this;
+			set: function(elem, value){
 				var data = $.data(elem, 'datalistWidget');
 				if(data){
 					data._autocomplete = value;
@@ -2939,12 +2484,11 @@ jQuery.webshims.ready('form-core dom-extend', function($, webshims, window, docu
 		
 		
 		webshims.defineNodeNameProperty('datalist', 'options', {
-			get: function(){
-				var elem = this;
+			get: function(elem){
 				var select = $('select', elem);
 				return (select[0]) ? select[0].options : [];
 			}
-		}, true, 'datalist-props', 'form-output-datalist');
+		});
 		
 		
 		webshims.addReady(function(context, contextElem){
@@ -2962,8 +2506,1463 @@ jQuery.webshims.ready('form-core dom-extend', function($, webshims, window, docu
 	})();
 	
 	
-	webshims.isReady('form-output-datalist', true);
+	webshims.createReadyEvent('form-output-datalist');
+}, true);// Copyright 2006 Google Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+
+//some modification for webshims lib based on excanvas r73
+
+
+// Known Issues:
+//
+// * Patterns only support repeat.
+// * Radial gradient are not implemented. The VML version of these look very
+//   different from the canvas one.
+// * Clipping paths are not implemented.
+// * Coordsize. The width and height attribute have higher priority than the
+//   width and height style values which isn't correct.
+// * Painting mode isn't implemented.
+// * Canvas width/height should is using content-box by default. IE in
+//   Quirks mode will draw the canvas using border-box. Either change your
+//   doctype to HTML5
+//   (http://www.whatwg.org/specs/web-apps/current-work/#the-doctype)
+//   or use Box Sizing Behavior from WebFX
+//   (http://webfx.eae.net/dhtml/boxsizing/boxsizing.html)
+// * Non uniform scaling does not correctly scale strokes.
+// * Optimize. There is always room for speed improvements.
+
+// Only add this code if we do not already have a canvas implementation
+if (!document.createElement('canvas').getContext) {
+
+(function() {
+
+  // alias some functions to make (compiled) code shorter
+  var m = Math;
+  var mr = m.round;
+  var ms = m.sin;
+  var mc = m.cos;
+  var abs = m.abs;
+  var sqrt = m.sqrt;
+
+  // this is used for sub pixel precision
+  var Z = 10;
+  var Z2 = Z / 2;
+
+  var IE_VERSION = +navigator.userAgent.match(/MSIE ([\d.]+)?/)[1];
+
+  /**
+   * This funtion is assigned to the <canvas> elements as element.getContext().
+   * @this {HTMLElement}
+   * @return {CanvasRenderingContext2D_}
+   */
+  function getContext() {
+    return this.context_ ||
+        (this.context_ = new CanvasRenderingContext2D_(this));
+  }
+
+  var slice = Array.prototype.slice;
+
+  /**
+   * Binds a function to an object. The returned function will always use the
+   * passed in {@code obj} as {@code this}.
+   *
+   * Example:
+   *
+   *   g = bind(f, obj, a, b)
+   *   g(c, d) // will do f.call(obj, a, b, c, d)
+   *
+   * @param {Function} f The function to bind the object to
+   * @param {Object} obj The object that should act as this when the function
+   *     is called
+   * @param {*} var_args Rest arguments that will be used as the initial
+   *     arguments when the function is called
+   * @return {Function} A new function that has bound this
+   */
+  function bind(f, obj, var_args) {
+    var a = slice.call(arguments, 2);
+    return function() {
+      return f.apply(obj, a.concat(slice.call(arguments)));
+    };
+  }
+
+  function encodeHtmlAttribute(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  }
+
+  function addNamespace(doc, prefix, urn) {
+    if (!doc.namespaces[prefix]) {
+      doc.namespaces.add(prefix, urn, '#default#VML');
+    }
+  }
+
+  function addNamespacesAndStylesheet(doc) {
+    addNamespace(doc, 'g_vml_', 'urn:schemas-microsoft-com:vml');
+    addNamespace(doc, 'g_o_', 'urn:schemas-microsoft-com:office:office');
+
+    // Setup default CSS.  Only add one style sheet per document
+    if (!doc.styleSheets['ex_canvas_']) {
+      var ss = doc.createStyleSheet();
+      ss.owningElement.id = 'ex_canvas_';
+      ss.cssText = 'canvas{display:inline-block;overflow:hidden;' +
+          // default size is 300x150 in Gecko and Opera
+          'text-align:left;width:300px;height:150px}';
+    }
+  }
+
+  // Add namespaces and stylesheet at startup.
+  addNamespacesAndStylesheet(document);
+
+  var G_vmlCanvasManager_ = {
+    init: function(opt_doc) {
+      var doc = opt_doc || document;
+      // Create a dummy element so that IE will allow canvas elements to be
+      // recognized.
+      doc.createElement('canvas');
+//      doc.attachEvent('onreadystatechange', bind(this.init_, this, doc));
+	  //webshims lib modification
+		var that = this;
+		setTimeout(function(){
+			jQuery(bind(that.init_, that, doc));
+		}, 0);
+    },
+
+    init_: function(doc) {
+      // find all canvas elements
+      var els = doc.getElementsByTagName('canvas');
+      for (var i = 0; i < els.length; i++) {
+        this.initElement(els[i]);
+      }
+    },
+
+    /**
+     * Public initializes a canvas element so that it can be used as canvas
+     * element from now on. This is called automatically before the page is
+     * loaded but if you are creating elements using createElement you need to
+     * make sure this is called on the element.
+     * @param {HTMLElement} el The canvas element to initialize.
+     * @return {HTMLElement} the element that was created.
+     */
+    initElement: function(el) {
+      if (!el.getContext) {
+        el.getContext = getContext;
+
+        // Add namespaces and stylesheet to document of the element.
+        addNamespacesAndStylesheet(el.ownerDocument);
+
+        // Remove fallback content. There is no way to hide text nodes so we
+        // just remove all childNodes. We could hide all elements and remove
+        // text nodes but who really cares about the fallback content.
+        el.innerHTML = '';
+
+        // do not use inline function because that will leak memory
+        el.attachEvent('onpropertychange', onPropertyChange);
+        el.attachEvent('onresize', onResize);
+
+        var attrs = el.attributes;
+        if (attrs.width && attrs.width.specified) {
+          // TODO: use runtimeStyle and coordsize
+          // el.getContext().setWidth_(attrs.width.nodeValue);
+          el.style.width = attrs.width.nodeValue + 'px';
+        } else {
+          el.width = el.clientWidth;
+        }
+        if (attrs.height && attrs.height.specified) {
+          // TODO: use runtimeStyle and coordsize
+          // el.getContext().setHeight_(attrs.height.nodeValue);
+          el.style.height = attrs.height.nodeValue + 'px';
+        } else {
+          el.height = el.clientHeight;
+        }
+        //el.getContext().setCoordsize_()
+      }
+      return el;
+    }
+  };
+
+  function onPropertyChange(e) {
+    var el = e.srcElement;
+	//webshims lib modification
+	if(!el.getContext || !('clearRect' in el.getContext())){return;}
+    switch (e.propertyName) {
+      case 'width':
+        el.getContext().clearRect();
+        el.style.width = el.attributes.width.nodeValue + 'px';
+        // In IE8 this does not trigger onresize.
+        el.firstChild.style.width =  el.clientWidth + 'px';
+        break;
+      case 'height':
+        el.getContext().clearRect();
+        el.style.height = el.attributes.height.nodeValue + 'px';
+        el.firstChild.style.height = el.clientHeight + 'px';
+        break;
+    }
+  }
+
+  function onResize(e) {
+    var el = e.srcElement;
+    if (el.firstChild) {
+      el.firstChild.style.width =  el.clientWidth + 'px';
+      el.firstChild.style.height = el.clientHeight + 'px';
+    }
+  }
+
+  G_vmlCanvasManager_.init();
+
+  // precompute "00" to "FF"
+  var decToHex = [];
+  for (var i = 0; i < 16; i++) {
+    for (var j = 0; j < 16; j++) {
+      decToHex[i * 16 + j] = i.toString(16) + j.toString(16);
+    }
+  }
+
+  function createMatrixIdentity() {
+    return [
+      [1, 0, 0],
+      [0, 1, 0],
+      [0, 0, 1]
+    ];
+  }
+
+  function matrixMultiply(m1, m2) {
+    var result = createMatrixIdentity();
+
+    for (var x = 0; x < 3; x++) {
+      for (var y = 0; y < 3; y++) {
+        var sum = 0;
+
+        for (var z = 0; z < 3; z++) {
+          sum += m1[x][z] * m2[z][y];
+        }
+
+        result[x][y] = sum;
+      }
+    }
+    return result;
+  }
+
+  function copyState(o1, o2) {
+    o2.fillStyle     = o1.fillStyle;
+    o2.lineCap       = o1.lineCap;
+    o2.lineJoin      = o1.lineJoin;
+    o2.lineWidth     = o1.lineWidth;
+    o2.miterLimit    = o1.miterLimit;
+    o2.shadowBlur    = o1.shadowBlur;
+    o2.shadowColor   = o1.shadowColor;
+    o2.shadowOffsetX = o1.shadowOffsetX;
+    o2.shadowOffsetY = o1.shadowOffsetY;
+    o2.strokeStyle   = o1.strokeStyle;
+    o2.globalAlpha   = o1.globalAlpha;
+    o2.font          = o1.font;
+    o2.textAlign     = o1.textAlign;
+    o2.textBaseline  = o1.textBaseline;
+    o2.arcScaleX_    = o1.arcScaleX_;
+    o2.arcScaleY_    = o1.arcScaleY_;
+    o2.lineScale_    = o1.lineScale_;
+  }
+
+  var colorData = {
+    aliceblue: '#F0F8FF',
+    antiquewhite: '#FAEBD7',
+    aquamarine: '#7FFFD4',
+    azure: '#F0FFFF',
+    beige: '#F5F5DC',
+    bisque: '#FFE4C4',
+    black: '#000000',
+    blanchedalmond: '#FFEBCD',
+    blueviolet: '#8A2BE2',
+    brown: '#A52A2A',
+    burlywood: '#DEB887',
+    cadetblue: '#5F9EA0',
+    chartreuse: '#7FFF00',
+    chocolate: '#D2691E',
+    coral: '#FF7F50',
+    cornflowerblue: '#6495ED',
+    cornsilk: '#FFF8DC',
+    crimson: '#DC143C',
+    cyan: '#00FFFF',
+    darkblue: '#00008B',
+    darkcyan: '#008B8B',
+    darkgoldenrod: '#B8860B',
+    darkgray: '#A9A9A9',
+    darkgreen: '#006400',
+    darkgrey: '#A9A9A9',
+    darkkhaki: '#BDB76B',
+    darkmagenta: '#8B008B',
+    darkolivegreen: '#556B2F',
+    darkorange: '#FF8C00',
+    darkorchid: '#9932CC',
+    darkred: '#8B0000',
+    darksalmon: '#E9967A',
+    darkseagreen: '#8FBC8F',
+    darkslateblue: '#483D8B',
+    darkslategray: '#2F4F4F',
+    darkslategrey: '#2F4F4F',
+    darkturquoise: '#00CED1',
+    darkviolet: '#9400D3',
+    deeppink: '#FF1493',
+    deepskyblue: '#00BFFF',
+    dimgray: '#696969',
+    dimgrey: '#696969',
+    dodgerblue: '#1E90FF',
+    firebrick: '#B22222',
+    floralwhite: '#FFFAF0',
+    forestgreen: '#228B22',
+    gainsboro: '#DCDCDC',
+    ghostwhite: '#F8F8FF',
+    gold: '#FFD700',
+    goldenrod: '#DAA520',
+    grey: '#808080',
+    greenyellow: '#ADFF2F',
+    honeydew: '#F0FFF0',
+    hotpink: '#FF69B4',
+    indianred: '#CD5C5C',
+    indigo: '#4B0082',
+    ivory: '#FFFFF0',
+    khaki: '#F0E68C',
+    lavender: '#E6E6FA',
+    lavenderblush: '#FFF0F5',
+    lawngreen: '#7CFC00',
+    lemonchiffon: '#FFFACD',
+    lightblue: '#ADD8E6',
+    lightcoral: '#F08080',
+    lightcyan: '#E0FFFF',
+    lightgoldenrodyellow: '#FAFAD2',
+    lightgreen: '#90EE90',
+    lightgrey: '#D3D3D3',
+    lightpink: '#FFB6C1',
+    lightsalmon: '#FFA07A',
+    lightseagreen: '#20B2AA',
+    lightskyblue: '#87CEFA',
+    lightslategray: '#778899',
+    lightslategrey: '#778899',
+    lightsteelblue: '#B0C4DE',
+    lightyellow: '#FFFFE0',
+    limegreen: '#32CD32',
+    linen: '#FAF0E6',
+    magenta: '#FF00FF',
+    mediumaquamarine: '#66CDAA',
+    mediumblue: '#0000CD',
+    mediumorchid: '#BA55D3',
+    mediumpurple: '#9370DB',
+    mediumseagreen: '#3CB371',
+    mediumslateblue: '#7B68EE',
+    mediumspringgreen: '#00FA9A',
+    mediumturquoise: '#48D1CC',
+    mediumvioletred: '#C71585',
+    midnightblue: '#191970',
+    mintcream: '#F5FFFA',
+    mistyrose: '#FFE4E1',
+    moccasin: '#FFE4B5',
+    navajowhite: '#FFDEAD',
+    oldlace: '#FDF5E6',
+    olivedrab: '#6B8E23',
+    orange: '#FFA500',
+    orangered: '#FF4500',
+    orchid: '#DA70D6',
+    palegoldenrod: '#EEE8AA',
+    palegreen: '#98FB98',
+    paleturquoise: '#AFEEEE',
+    palevioletred: '#DB7093',
+    papayawhip: '#FFEFD5',
+    peachpuff: '#FFDAB9',
+    peru: '#CD853F',
+    pink: '#FFC0CB',
+    plum: '#DDA0DD',
+    powderblue: '#B0E0E6',
+    rosybrown: '#BC8F8F',
+    royalblue: '#4169E1',
+    saddlebrown: '#8B4513',
+    salmon: '#FA8072',
+    sandybrown: '#F4A460',
+    seagreen: '#2E8B57',
+    seashell: '#FFF5EE',
+    sienna: '#A0522D',
+    skyblue: '#87CEEB',
+    slateblue: '#6A5ACD',
+    slategray: '#708090',
+    slategrey: '#708090',
+    snow: '#FFFAFA',
+    springgreen: '#00FF7F',
+    steelblue: '#4682B4',
+    tan: '#D2B48C',
+    thistle: '#D8BFD8',
+    tomato: '#FF6347',
+    turquoise: '#40E0D0',
+    violet: '#EE82EE',
+    wheat: '#F5DEB3',
+    whitesmoke: '#F5F5F5',
+    yellowgreen: '#9ACD32'
+  };
+
+
+  function getRgbHslContent(styleString) {
+    var start = styleString.indexOf('(', 3);
+    var end = styleString.indexOf(')', start + 1);
+    var parts = styleString.substring(start + 1, end).split(',');
+    // add alpha if needed
+    if (parts.length != 4 || styleString.charAt(3) != 'a') {
+      parts[3] = 1;
+    }
+    return parts;
+  }
+
+  function percent(s) {
+    return parseFloat(s) / 100;
+  }
+
+  function clamp(v, min, max) {
+    return Math.min(max, Math.max(min, v));
+  }
+
+  function hslToRgb(parts){
+    var r, g, b, h, s, l;
+    h = parseFloat(parts[0]) / 360 % 360;
+    if (h < 0)
+      h++;
+    s = clamp(percent(parts[1]), 0, 1);
+    l = clamp(percent(parts[2]), 0, 1);
+    if (s == 0) {
+      r = g = b = l; // achromatic
+    } else {
+      var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+      var p = 2 * l - q;
+      r = hueToRgb(p, q, h + 1 / 3);
+      g = hueToRgb(p, q, h);
+      b = hueToRgb(p, q, h - 1 / 3);
+    }
+
+    return '#' + decToHex[Math.floor(r * 255)] +
+        decToHex[Math.floor(g * 255)] +
+        decToHex[Math.floor(b * 255)];
+  }
+
+  function hueToRgb(m1, m2, h) {
+    if (h < 0)
+      h++;
+    if (h > 1)
+      h--;
+
+    if (6 * h < 1)
+      return m1 + (m2 - m1) * 6 * h;
+    else if (2 * h < 1)
+      return m2;
+    else if (3 * h < 2)
+      return m1 + (m2 - m1) * (2 / 3 - h) * 6;
+    else
+      return m1;
+  }
+
+  var processStyleCache = {};
+
+  function processStyle(styleString) {
+    if (styleString in processStyleCache) {
+      return processStyleCache[styleString];
+    }
+
+    var str, alpha = 1;
+
+    styleString = String(styleString);
+    if (styleString.charAt(0) == '#') {
+      str = styleString;
+    } else if (/^rgb/.test(styleString)) {
+      var parts = getRgbHslContent(styleString);
+      var str = '#', n;
+      for (var i = 0; i < 3; i++) {
+        if (parts[i].indexOf('%') != -1) {
+          n = Math.floor(percent(parts[i]) * 255);
+        } else {
+          n = +parts[i];
+        }
+        str += decToHex[clamp(n, 0, 255)];
+      }
+      alpha = +parts[3];
+    } else if (/^hsl/.test(styleString)) {
+      var parts = getRgbHslContent(styleString);
+      str = hslToRgb(parts);
+      alpha = parts[3];
+    } else {
+      str = colorData[styleString] || styleString;
+    }
+    return processStyleCache[styleString] = {color: str, alpha: alpha};
+  }
+
+  var DEFAULT_STYLE = {
+    style: 'normal',
+    variant: 'normal',
+    weight: 'normal',
+    size: 10,
+    family: 'sans-serif'
+  };
+
+  // Internal text style cache
+  var fontStyleCache = {};
+
+  function processFontStyle(styleString) {
+    if (fontStyleCache[styleString]) {
+      return fontStyleCache[styleString];
+    }
+
+    var el = document.createElement('div');
+    var style = el.style;
+    try {
+      style.font = styleString;
+    } catch (ex) {
+      // Ignore failures to set to invalid font.
+    }
+
+    return fontStyleCache[styleString] = {
+      style: style.fontStyle || DEFAULT_STYLE.style,
+      variant: style.fontVariant || DEFAULT_STYLE.variant,
+      weight: style.fontWeight || DEFAULT_STYLE.weight,
+      size: style.fontSize || DEFAULT_STYLE.size,
+      family: style.fontFamily || DEFAULT_STYLE.family
+    };
+  }
+
+  function getComputedStyle(style, element) {
+    var computedStyle = {};
+
+    for (var p in style) {
+      computedStyle[p] = style[p];
+    }
+
+    // Compute the size
+    var canvasFontSize = parseFloat(element.currentStyle.fontSize),
+        fontSize = parseFloat(style.size);
+
+    if (typeof style.size == 'number') {
+      computedStyle.size = style.size;
+    } else if (style.size.indexOf('px') != -1) {
+      computedStyle.size = fontSize;
+    } else if (style.size.indexOf('em') != -1) {
+      computedStyle.size = canvasFontSize * fontSize;
+    } else if(style.size.indexOf('%') != -1) {
+      computedStyle.size = (canvasFontSize / 100) * fontSize;
+    } else if (style.size.indexOf('pt') != -1) {
+      computedStyle.size = fontSize / .75;
+    } else {
+      computedStyle.size = canvasFontSize;
+    }
+
+    // Different scaling between normal text and VML text. This was found using
+    // trial and error to get the same size as non VML text.
+    computedStyle.size *= 0.981;
+
+    return computedStyle;
+  }
+
+  function buildStyle(style) {
+    return style.style + ' ' + style.variant + ' ' + style.weight + ' ' +
+        style.size + 'px ' + style.family;
+  }
+
+  var lineCapMap = {
+    'butt': 'flat',
+    'round': 'round'
+  };
+
+  function processLineCap(lineCap) {
+    return lineCapMap[lineCap] || 'square';
+  }
+
+  /**
+   * This class implements CanvasRenderingContext2D interface as described by
+   * the WHATWG.
+   * @param {HTMLElement} canvasElement The element that the 2D context should
+   * be associated with
+   */
+  function CanvasRenderingContext2D_(canvasElement) {
+    this.m_ = createMatrixIdentity();
+
+    this.mStack_ = [];
+    this.aStack_ = [];
+    this.currentPath_ = [];
+
+    // Canvas context properties
+    this.strokeStyle = '#000';
+    this.fillStyle = '#000';
+
+    this.lineWidth = 1;
+    this.lineJoin = 'miter';
+    this.lineCap = 'butt';
+    this.miterLimit = Z * 1;
+    this.globalAlpha = 1;
+    this.font = '10px sans-serif';
+    this.textAlign = 'left';
+    this.textBaseline = 'alphabetic';
+    this.canvas = canvasElement;
+
+    var cssText = 'width:' + canvasElement.clientWidth + 'px;height:' +
+        canvasElement.clientHeight + 'px;overflow:hidden;position:absolute';
+    var el = canvasElement.ownerDocument.createElement('div');
+    el.style.cssText = cssText;
+    canvasElement.appendChild(el);
+
+    var overlayEl = el.cloneNode(false);
+    // Use a non transparent background.
+    overlayEl.style.backgroundColor = 'red';
+    overlayEl.style.filter = 'alpha(opacity=0)';
+    canvasElement.appendChild(overlayEl);
+
+    this.element_ = el;
+    this.arcScaleX_ = 1;
+    this.arcScaleY_ = 1;
+    this.lineScale_ = 1;
+  }
+
+  var contextPrototype = CanvasRenderingContext2D_.prototype;
+  contextPrototype.clearRect = function() {
+    if (this.textMeasureEl_) {
+      this.textMeasureEl_.removeNode(true);
+      this.textMeasureEl_ = null;
+    }
+    this.element_.innerHTML = '';
+  };
+
+  contextPrototype.beginPath = function() {
+    // TODO: Branch current matrix so that save/restore has no effect
+    //       as per safari docs.
+    this.currentPath_ = [];
+  };
+
+  contextPrototype.moveTo = function(aX, aY) {
+    var p = getCoords(this, aX, aY);
+    this.currentPath_.push({type: 'moveTo', x: p.x, y: p.y});
+    this.currentX_ = p.x;
+    this.currentY_ = p.y;
+  };
+
+  contextPrototype.lineTo = function(aX, aY) {
+    var p = getCoords(this, aX, aY);
+    this.currentPath_.push({type: 'lineTo', x: p.x, y: p.y});
+
+    this.currentX_ = p.x;
+    this.currentY_ = p.y;
+  };
+
+  contextPrototype.bezierCurveTo = function(aCP1x, aCP1y,
+                                            aCP2x, aCP2y,
+                                            aX, aY) {
+    var p = getCoords(this, aX, aY);
+    var cp1 = getCoords(this, aCP1x, aCP1y);
+    var cp2 = getCoords(this, aCP2x, aCP2y);
+    bezierCurveTo(this, cp1, cp2, p);
+  };
+
+  // Helper function that takes the already fixed cordinates.
+  function bezierCurveTo(self, cp1, cp2, p) {
+    self.currentPath_.push({
+      type: 'bezierCurveTo',
+      cp1x: cp1.x,
+      cp1y: cp1.y,
+      cp2x: cp2.x,
+      cp2y: cp2.y,
+      x: p.x,
+      y: p.y
+    });
+    self.currentX_ = p.x;
+    self.currentY_ = p.y;
+  }
+
+  contextPrototype.quadraticCurveTo = function(aCPx, aCPy, aX, aY) {
+    // the following is lifted almost directly from
+    // http://developer.mozilla.org/en/docs/Canvas_tutorial:Drawing_shapes
+
+    var cp = getCoords(this, aCPx, aCPy);
+    var p = getCoords(this, aX, aY);
+
+    var cp1 = {
+      x: this.currentX_ + 2.0 / 3.0 * (cp.x - this.currentX_),
+      y: this.currentY_ + 2.0 / 3.0 * (cp.y - this.currentY_)
+    };
+    var cp2 = {
+      x: cp1.x + (p.x - this.currentX_) / 3.0,
+      y: cp1.y + (p.y - this.currentY_) / 3.0
+    };
+
+    bezierCurveTo(this, cp1, cp2, p);
+  };
+
+  contextPrototype.arc = function(aX, aY, aRadius,
+                                  aStartAngle, aEndAngle, aClockwise) {
+    aRadius *= Z;
+    var arcType = aClockwise ? 'at' : 'wa';
+
+    var xStart = aX + mc(aStartAngle) * aRadius - Z2;
+    var yStart = aY + ms(aStartAngle) * aRadius - Z2;
+
+    var xEnd = aX + mc(aEndAngle) * aRadius - Z2;
+    var yEnd = aY + ms(aEndAngle) * aRadius - Z2;
+
+    // IE won't render arches drawn counter clockwise if xStart == xEnd.
+    if (xStart == xEnd && !aClockwise) {
+      xStart += 0.125; // Offset xStart by 1/80 of a pixel. Use something
+                       // that can be represented in binary
+    }
+
+    var p = getCoords(this, aX, aY);
+    var pStart = getCoords(this, xStart, yStart);
+    var pEnd = getCoords(this, xEnd, yEnd);
+
+    this.currentPath_.push({type: arcType,
+                           x: p.x,
+                           y: p.y,
+                           radius: aRadius,
+                           xStart: pStart.x,
+                           yStart: pStart.y,
+                           xEnd: pEnd.x,
+                           yEnd: pEnd.y});
+
+  };
+
+  contextPrototype.rect = function(aX, aY, aWidth, aHeight) {
+    this.moveTo(aX, aY);
+    this.lineTo(aX + aWidth, aY);
+    this.lineTo(aX + aWidth, aY + aHeight);
+    this.lineTo(aX, aY + aHeight);
+    this.closePath();
+  };
+
+  contextPrototype.strokeRect = function(aX, aY, aWidth, aHeight) {
+    var oldPath = this.currentPath_;
+    this.beginPath();
+
+    this.moveTo(aX, aY);
+    this.lineTo(aX + aWidth, aY);
+    this.lineTo(aX + aWidth, aY + aHeight);
+    this.lineTo(aX, aY + aHeight);
+    this.closePath();
+    this.stroke();
+
+    this.currentPath_ = oldPath;
+  };
+
+  contextPrototype.fillRect = function(aX, aY, aWidth, aHeight) {
+    var oldPath = this.currentPath_;
+    this.beginPath();
+
+    this.moveTo(aX, aY);
+    this.lineTo(aX + aWidth, aY);
+    this.lineTo(aX + aWidth, aY + aHeight);
+    this.lineTo(aX, aY + aHeight);
+    this.closePath();
+    this.fill();
+
+    this.currentPath_ = oldPath;
+  };
+
+  contextPrototype.createLinearGradient = function(aX0, aY0, aX1, aY1) {
+    var gradient = new CanvasGradient_('gradient');
+    gradient.x0_ = aX0;
+    gradient.y0_ = aY0;
+    gradient.x1_ = aX1;
+    gradient.y1_ = aY1;
+    return gradient;
+  };
+
+  contextPrototype.createRadialGradient = function(aX0, aY0, aR0,
+                                                   aX1, aY1, aR1) {
+    var gradient = new CanvasGradient_('gradientradial');
+    gradient.x0_ = aX0;
+    gradient.y0_ = aY0;
+    gradient.r0_ = aR0;
+    gradient.x1_ = aX1;
+    gradient.y1_ = aY1;
+    gradient.r1_ = aR1;
+    return gradient;
+  };
+
+  contextPrototype.drawImage = function(image, var_args) {
+    var dx, dy, dw, dh, sx, sy, sw, sh;
+
+    // to find the original width we overide the width and height
+    var oldRuntimeWidth = image.runtimeStyle.width;
+    var oldRuntimeHeight = image.runtimeStyle.height;
+    image.runtimeStyle.width = 'auto';
+    image.runtimeStyle.height = 'auto';
+
+    // get the original size
+    var w = image.width;
+    var h = image.height;
+
+    // and remove overides
+    image.runtimeStyle.width = oldRuntimeWidth;
+    image.runtimeStyle.height = oldRuntimeHeight;
+
+    if (arguments.length == 3) {
+      dx = arguments[1];
+      dy = arguments[2];
+      sx = sy = 0;
+      sw = dw = w;
+      sh = dh = h;
+    } else if (arguments.length == 5) {
+      dx = arguments[1];
+      dy = arguments[2];
+      dw = arguments[3];
+      dh = arguments[4];
+      sx = sy = 0;
+      sw = w;
+      sh = h;
+    } else if (arguments.length == 9) {
+      sx = arguments[1];
+      sy = arguments[2];
+      sw = arguments[3];
+      sh = arguments[4];
+      dx = arguments[5];
+      dy = arguments[6];
+      dw = arguments[7];
+      dh = arguments[8];
+    } else {
+      throw Error('Invalid number of arguments');
+    }
+
+    var d = getCoords(this, dx, dy);
+
+    var w2 = sw / 2;
+    var h2 = sh / 2;
+
+    var vmlStr = [];
+
+    var W = 10;
+    var H = 10;
+
+    // For some reason that I've now forgotten, using divs didn't work
+    vmlStr.push(' <g_vml_:group',
+                ' coordsize="', Z * W, ',', Z * H, '"',
+                ' coordorigin="0,0"' ,
+                ' style="width:', W, 'px;height:', H, 'px;position:absolute;');
+
+    // If filters are necessary (rotation exists), create them
+    // filters are bog-slow, so only create them if abbsolutely necessary
+    // The following check doesn't account for skews (which don't exist
+    // in the canvas spec (yet) anyway.
+
+    if (this.m_[0][0] != 1 || this.m_[0][1] ||
+        this.m_[1][1] != 1 || this.m_[1][0]) {
+      var filter = [];
+
+      // Note the 12/21 reversal
+      filter.push('M11=', this.m_[0][0], ',',
+                  'M12=', this.m_[1][0], ',',
+                  'M21=', this.m_[0][1], ',',
+                  'M22=', this.m_[1][1], ',',
+                  'Dx=', mr(d.x / Z), ',',
+                  'Dy=', mr(d.y / Z), '');
+
+      // Bounding box calculation (need to minimize displayed area so that
+      // filters don't waste time on unused pixels.
+      var max = d;
+      var c2 = getCoords(this, dx + dw, dy);
+      var c3 = getCoords(this, dx, dy + dh);
+      var c4 = getCoords(this, dx + dw, dy + dh);
+
+      max.x = m.max(max.x, c2.x, c3.x, c4.x);
+      max.y = m.max(max.y, c2.y, c3.y, c4.y);
+
+      vmlStr.push('padding:0 ', mr(max.x / Z), 'px ', mr(max.y / Z),
+                  'px 0;filter:progid:DXImageTransform.Microsoft.Matrix(',
+                  filter.join(''), ", sizingmethod='clip');");
+
+    } else {
+      vmlStr.push('top:', mr(d.y / Z), 'px;left:', mr(d.x / Z), 'px;');
+    }
+
+    vmlStr.push(' ">' ,
+                '<g_vml_:image src="', image.src, '"',
+                ' style="width:', Z * dw, 'px;',
+                ' height:', Z * dh, 'px"',
+                ' cropleft="', sx / w, '"',
+                ' croptop="', sy / h, '"',
+                ' cropright="', (w - sx - sw) / w, '"',
+                ' cropbottom="', (h - sy - sh) / h, '"',
+                ' />',
+                '</g_vml_:group>');
+
+    this.element_.insertAdjacentHTML('BeforeEnd', vmlStr.join(''));
+  };
+
+  contextPrototype.stroke = function(aFill) {
+    var lineStr = [];
+    var lineOpen = false;
+
+    var W = 10;
+    var H = 10;
+
+    lineStr.push('<g_vml_:shape',
+                 ' filled="', !!aFill, '"',
+                 ' style="position:absolute;width:', W, 'px;height:', H, 'px;"',
+                 ' coordorigin="0,0"',
+                 ' coordsize="', Z * W, ',', Z * H, '"',
+                 ' stroked="', !aFill, '"',
+                 ' path="');
+
+    var newSeq = false;
+    var min = {x: null, y: null};
+    var max = {x: null, y: null};
+
+    for (var i = 0; i < this.currentPath_.length; i++) {
+      var p = this.currentPath_[i];
+      var c;
+
+      switch (p.type) {
+        case 'moveTo':
+          c = p;
+          lineStr.push(' m ', mr(p.x), ',', mr(p.y));
+          break;
+        case 'lineTo':
+          lineStr.push(' l ', mr(p.x), ',', mr(p.y));
+          break;
+        case 'close':
+          lineStr.push(' x ');
+          p = null;
+          break;
+        case 'bezierCurveTo':
+          lineStr.push(' c ',
+                       mr(p.cp1x), ',', mr(p.cp1y), ',',
+                       mr(p.cp2x), ',', mr(p.cp2y), ',',
+                       mr(p.x), ',', mr(p.y));
+          break;
+        case 'at':
+        case 'wa':
+          lineStr.push(' ', p.type, ' ',
+                       mr(p.x - this.arcScaleX_ * p.radius), ',',
+                       mr(p.y - this.arcScaleY_ * p.radius), ' ',
+                       mr(p.x + this.arcScaleX_ * p.radius), ',',
+                       mr(p.y + this.arcScaleY_ * p.radius), ' ',
+                       mr(p.xStart), ',', mr(p.yStart), ' ',
+                       mr(p.xEnd), ',', mr(p.yEnd));
+          break;
+      }
+
+
+      // TODO: Following is broken for curves due to
+      //       move to proper paths.
+
+      // Figure out dimensions so we can do gradient fills
+      // properly
+      if (p) {
+        if (min.x == null || p.x < min.x) {
+          min.x = p.x;
+        }
+        if (max.x == null || p.x > max.x) {
+          max.x = p.x;
+        }
+        if (min.y == null || p.y < min.y) {
+          min.y = p.y;
+        }
+        if (max.y == null || p.y > max.y) {
+          max.y = p.y;
+        }
+      }
+    }
+    lineStr.push(' ">');
+
+    if (!aFill) {
+      appendStroke(this, lineStr);
+    } else {
+      appendFill(this, lineStr, min, max);
+    }
+
+    lineStr.push('</g_vml_:shape>');
+
+    this.element_.insertAdjacentHTML('beforeEnd', lineStr.join(''));
+  };
+
+  function appendStroke(ctx, lineStr) {
+    var a = processStyle(ctx.strokeStyle);
+    var color = a.color;
+    var opacity = a.alpha * ctx.globalAlpha;
+    var lineWidth = ctx.lineScale_ * ctx.lineWidth;
+
+    // VML cannot correctly render a line if the width is less than 1px.
+    // In that case, we dilute the color to make the line look thinner.
+    if (lineWidth < 1) {
+      opacity *= lineWidth;
+    }
+
+    lineStr.push(
+      '<g_vml_:stroke',
+      ' opacity="', opacity, '"',
+      ' joinstyle="', ctx.lineJoin, '"',
+      ' miterlimit="', ctx.miterLimit, '"',
+      ' endcap="', processLineCap(ctx.lineCap), '"',
+      ' weight="', lineWidth, 'px"',
+      ' color="', color, '" />'
+    );
+  }
+
+  function appendFill(ctx, lineStr, min, max) {
+    var fillStyle = ctx.fillStyle;
+    var arcScaleX = ctx.arcScaleX_;
+    var arcScaleY = ctx.arcScaleY_;
+    var width = max.x - min.x;
+    var height = max.y - min.y;
+    if (fillStyle instanceof CanvasGradient_) {
+      // TODO: Gradients transformed with the transformation matrix.
+      var angle = 0;
+      var focus = {x: 0, y: 0};
+
+      // additional offset
+      var shift = 0;
+      // scale factor for offset
+      var expansion = 1;
+
+      if (fillStyle.type_ == 'gradient') {
+        var x0 = fillStyle.x0_ / arcScaleX;
+        var y0 = fillStyle.y0_ / arcScaleY;
+        var x1 = fillStyle.x1_ / arcScaleX;
+        var y1 = fillStyle.y1_ / arcScaleY;
+        var p0 = getCoords(ctx, x0, y0);
+        var p1 = getCoords(ctx, x1, y1);
+        var dx = p1.x - p0.x;
+        var dy = p1.y - p0.y;
+        angle = Math.atan2(dx, dy) * 180 / Math.PI;
+
+        // The angle should be a non-negative number.
+        if (angle < 0) {
+          angle += 360;
+        }
+
+        // Very small angles produce an unexpected result because they are
+        // converted to a scientific notation string.
+        if (angle < 1e-6) {
+          angle = 0;
+        }
+      } else {
+        var p0 = getCoords(ctx, fillStyle.x0_, fillStyle.y0_);
+        focus = {
+          x: (p0.x - min.x) / width,
+          y: (p0.y - min.y) / height
+        };
+
+        width  /= arcScaleX * Z;
+        height /= arcScaleY * Z;
+        var dimension = m.max(width, height);
+        shift = 2 * fillStyle.r0_ / dimension;
+        expansion = 2 * fillStyle.r1_ / dimension - shift;
+      }
+
+      // We need to sort the color stops in ascending order by offset,
+      // otherwise IE won't interpret it correctly.
+      var stops = fillStyle.colors_;
+      stops.sort(function(cs1, cs2) {
+        return cs1.offset - cs2.offset;
+      });
+
+      var length = stops.length;
+      var color1 = stops[0].color;
+      var color2 = stops[length - 1].color;
+      var opacity1 = stops[0].alpha * ctx.globalAlpha;
+      var opacity2 = stops[length - 1].alpha * ctx.globalAlpha;
+
+      var colors = [];
+      for (var i = 0; i < length; i++) {
+        var stop = stops[i];
+        colors.push(stop.offset * expansion + shift + ' ' + stop.color);
+      }
+
+      // When colors attribute is used, the meanings of opacity and o:opacity2
+      // are reversed.
+      lineStr.push('<g_vml_:fill type="', fillStyle.type_, '"',
+                   ' method="none" focus="100%"',
+                   ' color="', color1, '"',
+                   ' color2="', color2, '"',
+                   ' colors="', colors.join(','), '"',
+                   ' opacity="', opacity2, '"',
+                   ' g_o_:opacity2="', opacity1, '"',
+                   ' angle="', angle, '"',
+                   ' focusposition="', focus.x, ',', focus.y, '" />');
+    } else if (fillStyle instanceof CanvasPattern_) {
+      if (width && height) {
+        var deltaLeft = -min.x;
+        var deltaTop = -min.y;
+        lineStr.push('<g_vml_:fill',
+                     ' position="',
+                     deltaLeft / width * arcScaleX * arcScaleX, ',',
+                     deltaTop / height * arcScaleY * arcScaleY, '"',
+                     ' type="tile"',
+                     // TODO: Figure out the correct size to fit the scale.
+                     //' size="', w, 'px ', h, 'px"',
+                     ' src="', fillStyle.src_, '" />');
+       }
+    } else {
+      var a = processStyle(ctx.fillStyle);
+      var color = a.color;
+      var opacity = a.alpha * ctx.globalAlpha;
+      lineStr.push('<g_vml_:fill color="', color, '" opacity="', opacity,
+                   '" />');
+    }
+  }
+
+  contextPrototype.fill = function() {
+    this.stroke(true);
+  };
+
+  contextPrototype.closePath = function() {
+    this.currentPath_.push({type: 'close'});
+  };
+
+  function getCoords(ctx, aX, aY) {
+    var m = ctx.m_;
+    return {
+      x: Z * (aX * m[0][0] + aY * m[1][0] + m[2][0]) - Z2,
+      y: Z * (aX * m[0][1] + aY * m[1][1] + m[2][1]) - Z2
+    };
+  };
+
+  contextPrototype.save = function() {
+    var o = {};
+    copyState(this, o);
+    this.aStack_.push(o);
+    this.mStack_.push(this.m_);
+    this.m_ = matrixMultiply(createMatrixIdentity(), this.m_);
+  };
+
+  contextPrototype.restore = function() {
+    if (this.aStack_.length) {
+      copyState(this.aStack_.pop(), this);
+      this.m_ = this.mStack_.pop();
+    }
+  };
+
+  function matrixIsFinite(m) {
+    return isFinite(m[0][0]) && isFinite(m[0][1]) &&
+        isFinite(m[1][0]) && isFinite(m[1][1]) &&
+        isFinite(m[2][0]) && isFinite(m[2][1]);
+  }
+
+  function setM(ctx, m, updateLineScale) {
+    if (!matrixIsFinite(m)) {
+      return;
+    }
+    ctx.m_ = m;
+
+    if (updateLineScale) {
+      // Get the line scale.
+      // Determinant of this.m_ means how much the area is enlarged by the
+      // transformation. So its square root can be used as a scale factor
+      // for width.
+      var det = m[0][0] * m[1][1] - m[0][1] * m[1][0];
+      ctx.lineScale_ = sqrt(abs(det));
+    }
+  }
+
+  contextPrototype.translate = function(aX, aY) {
+    var m1 = [
+      [1,  0,  0],
+      [0,  1,  0],
+      [aX, aY, 1]
+    ];
+
+    setM(this, matrixMultiply(m1, this.m_), false);
+  };
+
+  contextPrototype.rotate = function(aRot) {
+    var c = mc(aRot);
+    var s = ms(aRot);
+
+    var m1 = [
+      [c,  s, 0],
+      [-s, c, 0],
+      [0,  0, 1]
+    ];
+
+    setM(this, matrixMultiply(m1, this.m_), false);
+  };
+
+  contextPrototype.scale = function(aX, aY) {
+    this.arcScaleX_ *= aX;
+    this.arcScaleY_ *= aY;
+    var m1 = [
+      [aX, 0,  0],
+      [0,  aY, 0],
+      [0,  0,  1]
+    ];
+
+    setM(this, matrixMultiply(m1, this.m_), true);
+  };
+
+  contextPrototype.transform = function(m11, m12, m21, m22, dx, dy) {
+    var m1 = [
+      [m11, m12, 0],
+      [m21, m22, 0],
+      [dx,  dy,  1]
+    ];
+
+    setM(this, matrixMultiply(m1, this.m_), true);
+  };
+
+  contextPrototype.setTransform = function(m11, m12, m21, m22, dx, dy) {
+    var m = [
+      [m11, m12, 0],
+      [m21, m22, 0],
+      [dx,  dy,  1]
+    ];
+
+    setM(this, m, true);
+  };
+
+  /**
+   * The text drawing function.
+   * The maxWidth argument isn't taken in account, since no browser supports
+   * it yet.
+   */
+  contextPrototype.drawText_ = function(text, x, y, maxWidth, stroke) {
+    var m = this.m_,
+        delta = 1000,
+        left = 0,
+        right = delta,
+        offset = {x: 0, y: 0},
+        lineStr = [];
+
+    var fontStyle = getComputedStyle(processFontStyle(this.font),
+                                     this.element_);
+
+    var fontStyleString = buildStyle(fontStyle);
+
+    var elementStyle = this.element_.currentStyle;
+    var textAlign = this.textAlign.toLowerCase();
+    switch (textAlign) {
+      case 'left':
+      case 'center':
+      case 'right':
+        break;
+      case 'end':
+        textAlign = elementStyle.direction == 'ltr' ? 'right' : 'left';
+        break;
+      case 'start':
+        textAlign = elementStyle.direction == 'rtl' ? 'right' : 'left';
+        break;
+      default:
+        textAlign = 'left';
+    }
+
+    // 1.75 is an arbitrary number, as there is no info about the text baseline
+    switch (this.textBaseline) {
+      case 'hanging':
+      case 'top':
+        offset.y = fontStyle.size / 1.75;
+        break;
+      case 'middle':
+        break;
+      default:
+      case null:
+      case 'alphabetic':
+      case 'ideographic':
+      case 'bottom':
+        offset.y = -fontStyle.size / 2.25;
+        break;
+    }
+
+    switch(textAlign) {
+      case 'right':
+        left = delta;
+        right = 0.05;
+        break;
+      case 'center':
+        left = right = delta / 2;
+        break;
+    }
+
+    var d = getCoords(this, x + offset.x, y + offset.y);
+
+    lineStr.push('<g_vml_:line from="', -left ,' 0" to="', right ,' 0.05" ',
+                 ' coordsize="100 100" coordorigin="0 0"',
+                 ' filled="', !stroke, '" stroked="', !!stroke,
+                 '" style="position:absolute;width:1px;height:1px;">');
+
+    if (stroke) {
+      appendStroke(this, lineStr);
+    } else {
+      // TODO: Fix the min and max params.
+      appendFill(this, lineStr, {x: -left, y: 0},
+                 {x: right, y: fontStyle.size});
+    }
+
+    var skewM = m[0][0].toFixed(3) + ',' + m[1][0].toFixed(3) + ',' +
+                m[0][1].toFixed(3) + ',' + m[1][1].toFixed(3) + ',0,0';
+
+    var skewOffset = mr(d.x / Z) + ',' + mr(d.y / Z);
+
+    lineStr.push('<g_vml_:skew on="t" matrix="', skewM ,'" ',
+                 ' offset="', skewOffset, '" origin="', left ,' 0" />',
+                 '<g_vml_:path textpathok="true" />',
+                 '<g_vml_:textpath on="true" string="',
+                 encodeHtmlAttribute(text),
+                 '" style="v-text-align:', textAlign,
+                 ';font:', encodeHtmlAttribute(fontStyleString),
+                 '" /></g_vml_:line>');
+
+    this.element_.insertAdjacentHTML('beforeEnd', lineStr.join(''));
+  };
+
+  contextPrototype.fillText = function(text, x, y, maxWidth) {
+    this.drawText_(text, x, y, maxWidth, false);
+  };
+
+  contextPrototype.strokeText = function(text, x, y, maxWidth) {
+    this.drawText_(text, x, y, maxWidth, true);
+  };
+
+  contextPrototype.measureText = function(text) {
+    if (!this.textMeasureEl_) {
+      var s = '<span style="position:absolute;' +
+          'top:-20000px;left:0;padding:0;margin:0;border:none;' +
+          'white-space:pre;"></span>';
+      this.element_.insertAdjacentHTML('beforeEnd', s);
+      this.textMeasureEl_ = this.element_.lastChild;
+    }
+    var doc = this.element_.ownerDocument;
+    this.textMeasureEl_.innerHTML = '';
+    this.textMeasureEl_.style.font = this.font;
+    // Don't use innerHTML or innerText because they allow markup/whitespace.
+    this.textMeasureEl_.appendChild(doc.createTextNode(text));
+    return {width: this.textMeasureEl_.offsetWidth};
+  };
+
+  /******** STUBS ********/
+  contextPrototype.clip = function() {
+    // TODO: Implement
+  };
+
+  contextPrototype.arcTo = function() {
+    // TODO: Implement
+  };
+
+  contextPrototype.createPattern = function(image, repetition) {
+    return new CanvasPattern_(image, repetition);
+  };
+
+  // Gradient / Pattern Stubs
+  function CanvasGradient_(aType) {
+    this.type_ = aType;
+    this.x0_ = 0;
+    this.y0_ = 0;
+    this.r0_ = 0;
+    this.x1_ = 0;
+    this.y1_ = 0;
+    this.r1_ = 0;
+    this.colors_ = [];
+  }
+
+  CanvasGradient_.prototype.addColorStop = function(aOffset, aColor) {
+    aColor = processStyle(aColor);
+    this.colors_.push({offset: aOffset,
+                       color: aColor.color,
+                       alpha: aColor.alpha});
+  };
+
+  function CanvasPattern_(image, repetition) {
+    assertImageIsValid(image);
+    switch (repetition) {
+      case 'repeat':
+      case null:
+      case '':
+        this.repetition_ = 'repeat';
+        break
+      case 'repeat-x':
+      case 'repeat-y':
+      case 'no-repeat':
+        this.repetition_ = repetition;
+        break;
+      default:
+        throwException('SYNTAX_ERR');
+    }
+
+    this.src_ = image.src;
+    this.width_ = image.width;
+    this.height_ = image.height;
+  }
+
+  function throwException(s) {
+    throw new DOMException_(s);
+  }
+
+  function assertImageIsValid(img) {
+    if (!img || img.nodeType != 1 || img.tagName != 'IMG') {
+      throwException('TYPE_MISMATCH_ERR');
+    }
+    if (img.readyState != 'complete') {
+      throwException('INVALID_STATE_ERR');
+    }
+  }
+
+  function DOMException_(s) {
+    this.code = this[s];
+    this.message = s +': DOM Exception ' + this.code;
+  }
+  var p = DOMException_.prototype = new Error;
+  p.INDEX_SIZE_ERR = 1;
+  p.DOMSTRING_SIZE_ERR = 2;
+  p.HIERARCHY_REQUEST_ERR = 3;
+  p.WRONG_DOCUMENT_ERR = 4;
+  p.INVALID_CHARACTER_ERR = 5;
+  p.NO_DATA_ALLOWED_ERR = 6;
+  p.NO_MODIFICATION_ALLOWED_ERR = 7;
+  p.NOT_FOUND_ERR = 8;
+  p.NOT_SUPPORTED_ERR = 9;
+  p.INUSE_ATTRIBUTE_ERR = 10;
+  p.INVALID_STATE_ERR = 11;
+  p.SYNTAX_ERR = 12;
+  p.INVALID_MODIFICATION_ERR = 13;
+  p.NAMESPACE_ERR = 14;
+  p.INVALID_ACCESS_ERR = 15;
+  p.VALIDATION_ERR = 16;
+  p.TYPE_MISMATCH_ERR = 17;
+
+  // set up externs
+  G_vmlCanvasManager = G_vmlCanvasManager_;
+  CanvasRenderingContext2D = CanvasRenderingContext2D_;
+  CanvasGradient = CanvasGradient_;
+  CanvasPattern = CanvasPattern_;
+  DOMException = DOMException_;
+})();
+/*
+*webshims-Extensions 
+*/
+jQuery.webshims.ready('es5', function($, webshims, window, doc){
+	if (!doc.styleSheets || !doc.namespaces){
+		return;
+	}
+	
+	webshims.defineNodeNameProperty('canvas', 'getContext', {
+		value: function(ctxName){
+			if(!this.getContext){
+				G_vmlCanvasManager.initElement(this);
+			}
+			return this.getContext(ctxName);
+		}
+	});
+			
+	webshims.addReady(function(context, elem){
+		if(doc === context){return;}
+		$('canvas', context).add(elem.filter('canvas')).each(function(){
+			if(!this.getContext){
+				G_vmlCanvasManager.initElement(this);
+			}
+		});
+	});
+	$(function(){
+		setTimeout(function(){
+			webshims.createReadyEvent('canvas');
+		}, 9);
+	});
 });
+} // if
+
 //JSON
 (function(){
 if('JSON'in window && JSON.stringify && JSON.parse){return;}
@@ -2973,7 +3972,7 @@ if(!this.JSON){this.JSON={};}(function(){function f(n){return n<10?'0'+n:n;}if(t
 
 var $ = jQuery;
 if(window.localStorage && window.sessionStorage){
-	$.webshims.isReady('json-storage', true);
+	$.webshims.createReadyEvent('json-storage');
 }
 })();
 
@@ -3155,7 +4154,7 @@ if (!window.sessionStorage) {window.sessionStorage = new Storage('session');}
 	$.webshims.localStorageSwfCallback = function(type){
 		clearTimeout(swfTimer);
 		if(window.localStorage){
-			$.webshims.isReady('json-storage', true);
+			$.webshims.createReadyEvent('json-storage');
 			return;
 		}
 		
@@ -3193,7 +4192,7 @@ if (!window.sessionStorage) {window.sessionStorage = new Storage('session');}
 		if(!window.localStorage){
 			window.localStorage = new Storage('local');
 		}
-		$.webshims.isReady('json-storage', true);
+		$.webshims.createReadyEvent('json-storage');
 	};
 	
 	jQuery.webshims.swfLocalStorage = {

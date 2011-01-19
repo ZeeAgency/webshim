@@ -35,14 +35,9 @@
 		}
 		
 		.d input {background: #000;}
-		:invalid {
-			background: #f00;
-			border: 2px solid #f00;
-		}
 	</style>
 	
-	<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.4.4/jquery.min.js"></script>
-	<script src="../src/extras/modernizr-1.6.min.js"></script>
+	<script src="jquery-1.4x.js"></script>
 	<script src="../src/polyfiller.js"></script>
 	<script>
 //		$.webshims.addPolyfill('iecss', {
@@ -55,66 +50,77 @@
 		
 		
 		
+		
 	</script>
 	<title>playing</title>
 	    <script>
-	    	
+	    				
 			$.webshims.debug = true;
-			$.webshims.cfg.extendNative = true;
-			window.FlashCanvas = {disableContextMenu: true};
-			$.webshims.canvasImplementation = 'flashpro';
+			$.webshims.loader.basePath += 'shims/';
 			$.webshims.polyfill();
-			var start = new Date().getTime();
 			
-//			$(function(){
-//				console.log('READY', start - new Date().getTime())
-//				alert($('#a')[0].required)
-//				alert($('#a')[0].validity.valid)
-//				alert($('#a').attr('validity').valueMissing)
-//				alert($('#b')[0].required)
-//				alert($('#b')[0].validity.valid)
-//				alert($('#b')[0].validity.valueMissing)
-//				$('#input-list')[0].required = true;
-//				console.log(.validity.valid);
-//			})
-//			$.webshims.ready('DOM', function(){
-//				console.log('domready', start - new Date().getTime())
-//			})
-//			$.webshims.ready('json-storage', function(){
-//				console.log('jsonready', start - new Date().getTime())
-//			})
-//			$.webshims.ready('forms-ext', function(){
-//				console.log('forms-ext', start - new Date().getTime())
-//			})
 	    </script>
 </head>
 
 <body class="js-off"> 
-<canvas id="my-canvas"></canvas>
 
-<script class="block run-once">
-$.webshims.ready('canvas', function(){
-	var ctx = $('#my-canvas').getContext('2d');
-	ctx.fillStyle = "rgb(200,0,0)";  
-	ctx.fillRect (10, 10, 55, 50);  
-	 
-	ctx.fillStyle = "rgba(0, 0, 200, 0.5)";  
-	ctx.fillRect (30, 30, 55, 50);
-});
-</script>
 <form id="test" action="#">
-	<input oninput="console.log(value = 10, a, b, this)" />
-<div>
-	<select name="a" id="a" required>
-		<option value="">a</option>
-		<option value="a">a</option>
-	</select>
+	<button type="submit">fdsfdsf</button>
+	<div>
 	
-	<select name="b" id="b">
-		<option value="">a</option>
-		<option value="a">a</option>
+	<input placeholder="saa" required="d" id="input-list" type="password" list="datalist" />
+
+	<input placeholder="saa" type="text" />
+	<datalist id="datalist">
+		<select>
+			<option>Test Text 1</option>
+			<option value="value of 2">Test Text 2Test Text 2Test Text 2Test Text 2</option>
+			<option>Test Text 1</option>
+			<option value="value of 2">Test Text 2Test Text 2Test Text 2Test Text 2</option>
+			<option>Test Text 1</option>
+			<option value="value of 2">Test Text 2Test Text 2Test Text 2Test Text 2</option>
+			<option>Test Text 1</option>
+			<option value="value of 2">Test Text 2Test Text 2Test Text 2Test Text 2</option>
+			<option>Test Text 1</option>
+			<option value="value of 2">Test Text 2Test Text 2Test Text 2Test Text 2</option>
+			<option>Test Text 1</option>
+			<option value="value of 2">Test Text 2Test Text 2Test Text 2Test Text 2</option>
+			<option>Test Text 1</option>
+			<option value="value of 2">Test Text 2Test Text 2Test Text 2Test Text 2</option>
+			<option>Test Text 1</option>
+			<option value="value of 2">Test Text 2Test Text 2Test Text 2Test Text 2</option>
+			<option>Test Text 1</option>
+			<option value="value of 2">Test Text 2Test Text 2Test Text 2Test Text 2</option>
+			<option>Test Text 1</option>
+			<option value="value of 2">Test Text 2Test Text 2Test Text 2Test Text 2</option>
+			<option>Test Text 1</option>
+			<option value="value of 2">Test Text 2Test Text 2Test Text 2Test Text 2</option>
+			<option>Test Text 1</option>
+			<option value="value of 2">Test Text 2Test Text 2Test Text 2Test Text 2</option>
+		</select>
+	</datalist>
+	
+	<datalist id="datalist2">
+		<select>
+			<option value="dsa2">2Test Text 1</option>
+			<option value="dsa">2Test Text 2</option>
+			<option label="2Test Text 1 label" value="dsa22"></option>
+		</select>
+	</datalist>
+	
+	<select multiple id="multiple-test">
+		<option>dsa1</option>
+		<option>dsa2</option>
+		<option>dsa3</option>
 	</select>
-	<input type="submit" />
+	<div class="input-date-datepicker-control"></div>
+	<script>
+		$(window).load(function(){
+			$('div.input-date-datepicker-control').datepicker();
+		})
+	</script>
+	
+	<button type="submit">fdsfdsf</button>
 </div>
 </form>
 	

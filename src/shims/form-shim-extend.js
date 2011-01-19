@@ -1,4 +1,4 @@
-jQuery.webshims.ready('form-core dom-extend', function($, webshims, window){
+jQuery.webshims.ready('form-core', function($, webshims, window){
 if($.support.validity){
 	return;
 }
@@ -121,7 +121,7 @@ webshims.defineNodeNamesProperty(['input', 'textarea', 'select', 'form', 'fields
 		};
 		return function(){
 			unhandledInvalids = false;
-			if($.nodeName(this, 'form')){
+			if($.nodeName(this, 'form') || $.nodeName(this, 'fieldset')){
 				var ret = true,
 					elems = this.elements || $( 'input, textarea, select', this);
 				
@@ -131,20 +131,20 @@ webshims.defineNodeNamesProperty(['input', 'textarea', 'select', 'form', 'fields
 					}
 				}
 				return ret;
-			} else if(this.form && !$.nodeName(this, 'fieldset')){
+			} else if(this.form){
 				return testValidity(this);
 			} else {
 				return true;
 			}
 		};
 	})()
-}, true);
+});
 
-webshims.defineNodeNamesProperty(['input', 'textarea', 'select', 'fieldset', 'button', 'output'], 'setCustomValidity', {
+webshims.defineNodeNamesProperty(['input', 'textarea', 'select'], 'setCustomValidity', {
 	value: function(error){
 		$.data(this, 'customvalidationMessage', ''+error);
 	}
-}, true);
+});
 
 
 $.event.special.invalid = {
@@ -184,6 +184,70 @@ $.event.special.invalid = {
 	}
 };
 
+// IDLs for constrain validation API
+webshims.defineNodeNamesProperty(['input', 'select', 'textarea'], 'validity', {
+	set: $.noop,
+	get: function(elem){
+		var validityState = $.data(elem, 'cachedValidity');
+		if(validityState){
+			return validityState;
+		}
+		validityState 	= $.extend({}, validiyPrototype);
+		
+		if( !$.attr(elem, 'willValidate') || elem.type == 'submit' ){
+			return validityState;
+		}
+		var jElm 			= $(elem),
+			val				= jElm.val(),
+			cache 			= {nodeName: elem.nodeName.toLowerCase()},
+			ariaInvalid 	= elem.getAttribute('aria-invalid')
+		;
+		
+		validityState.customError = !!($.data(elem, 'customvalidationMessage'));
+		if( validityState.customError ){
+			validityState.valid = false;
+		}
+						
+		$.each(validityRules, function(rule, fn){
+			if (fn(jElm, val, cache)) {
+				validityState[rule] = true;
+				validityState.valid = false;
+			}
+		});
+		elem.setAttribute('aria-invalid',  validityState.valid ? 'false' : 'true');
+		return validityState;
+	}
+});
+
+
+//todo
+webshims.defineNodeNamesBooleanProperty(['input', 'textarea', 'select'], 'required', {
+	set: function(elem, value){
+		elem.setAttribute('aria-required', (value) ? 'true' : 'false');
+	},
+	init: true
+});
+
+webshims.defineNodeNamesProperty(['input', 'select', 'textarea', 'fieldset', 'button', 'output'], 'willValidate', {
+	get: (function(){
+		var types = {
+				button: 1,
+				reset: 1,
+				add: 1,
+				remove: 1,
+				'move-up': 1,
+				'move-down': 1,
+				hidden: 1
+			}
+		;
+		var barredElems = {fieldset: 1, button: 1, output: 1};
+		return function(elem){
+			//elem.name && <- we don't use to make it easier for developers
+			return !!( elem.form && !elem.disabled && !elem.readOnly && !types[elem.type] && !barredElems[(elem.nodeName || '').toLowerCase()] && $.attr(elem.form, 'novalidate') == null );
+		};
+	})()
+}, true, 'form-htc-validity.htc');
+
 
 webshims.addInputType('email', {
 	mismatch: (function(){
@@ -203,73 +267,6 @@ webshims.addInputType('url', {
 			return !test.test(val);
 		};
 	})()
-});
-
-// IDLs for constrain validation API
-webshims.defineNodeNamesProperty(['input', 'select', 'textarea', 'fieldset', 'button', 'output'], 'willValidate', {
-	get: (function(){
-		var types = {
-				button: 1,
-				reset: 1,
-				add: 1,
-				remove: 1,
-				'move-up': 1,
-				'move-down': 1,
-				hidden: 1
-			}
-		;
-		var barredElems = {fieldset: 1, button: 1, output: 1};
-		return function(){
-			var elem = this;
-			//elem.name && <- we don't use to make it easier for developers
-			return !!( elem.form && !elem.disabled && !elem.readOnly && !types[elem.type] && !barredElems[(elem.nodeName || '').toLowerCase()] && $.attr(elem.form, 'novalidate') == null );
-		};
-	})()
-}, true, 'validity-base', 'form-extend');
-
-webshims.defineNodeNamesBooleanProperty(['input', 'textarea', 'select'], 'required', {
-	set: function(value){
-		var elem = this;
-		elem.setAttribute('aria-required', (value) ? 'true' : 'false');
-	},
-	contentAttr: true
-}, true, true, 'form-extend');
-
-['input', 'select', 'textarea', 'fieldset', 'button', 'output'].forEach(function(nodeName){
-	webshims.defineNodeNameProperty(nodeName, 'validity', {
-		set: $.noop,
-		get: function(){
-			var elem = this;
-			var validityState = $.data(elem, 'cachedValidity');
-			if(validityState){
-				return validityState;
-			}
-			validityState 	= $.extend({}, validiyPrototype);
-			
-			if( !$.attr(elem, 'willValidate') || elem.type == 'submit' ){
-				return validityState;
-			}
-			var jElm 			= $(elem),
-				val				= jElm.val(),
-				cache 			= {nodeName: elem.nodeName.toLowerCase()},
-				ariaInvalid 	= elem.getAttribute('aria-invalid')
-			;
-			
-			validityState.customError = !!($.data(elem, 'customvalidationMessage'));
-			if( validityState.customError ){
-				validityState.valid = false;
-			}
-							
-			$.each(validityRules, function(rule, fn){
-				if (fn(jElm, val, cache)) {
-					validityState[rule] = true;
-					validityState.valid = false;
-				}
-			});
-			elem.setAttribute('aria-invalid',  validityState.valid ? 'false' : 'true');
-			return validityState;
-		}
-	}, true, 'validity-base', 'form-extend');
 });
 
 var noValidate = function(){
@@ -320,9 +317,9 @@ webshims.addReady(function(context, contextElem){
 	
 });
 
-webshims.isReady('form-extend', true);
+webshims.createReadyEvent('form-extend');
 
-}); //webshims.ready end
+}, true); //webshims.ready end
 
 
 

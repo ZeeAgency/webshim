@@ -31,6 +31,7 @@
 		jQuery.noConflict();
 		(function($){
 			$(window).load(function(){
+				$.webshims.loader.basePath += 'shims/';
 				$.webshims.polyfill();
 			});
 		})(jQuery);

@@ -79,69 +79,87 @@ jQuery.webshims.ready('form-message form-core', function($, webshims, window, do
 		});
 		validityElements.push('input');
 	}
-	
+			
+	if(!support.requiredSelect){
+		webshims.defineNodeNamesBooleanProperty(['select'], 'required', {
+			set: function(elem, value){
+				elem.setAttribute('aria-required', (value) ? 'true' : 'false');
+			},
+			init: true
+		});
+		
+		webshims.addValidityRule('valueMissing', function(jElm, val, cache, validityState){
+			
+			if(cache.nodeName == 'select' && !val && jElm.attr('required') && jElm[0].size < 2){
+				if(!cache.type){
+					cache.type = jElm[0].type;
+				}
+				
+				if(cache.type == 'select-one' && $('> option:first-child:not(:disabled)', jElm).attr('selected')){
+					return true;
+				}
+			}
+			return validityState.valueMissing;
+		});
+	}
 	
 	if(overrideValidity){
-		
-		validityElements.forEach(function(nodeName){
-			
-			var oldDesc = webshims.defineNodeNameProperty(nodeName, 'validity', {
-				get: function(){
-					var elem = this;
-					var validity = oldDesc._supget.call(this);
-					if(!validity){
-						return validity;
-					}
-					var validityState = {};
-					validityProps.forEach(function(prop){
-						validityState[prop] = validity[prop];
-					});
-					
-					if( !$.attr(elem, 'willValidate') ){
-						return validityState;
-					}
-					var jElm 			= $(elem),
-						cache 			= {type: (elem.getAttribute && elem.getAttribute('type') || '').toLowerCase(), nodeName: (elem.nodeName || '').toLowerCase()},
-						val				= oldVal.call(jElm),
-						customError 	= !!($.data(elem, 'hasCustomError')),
-						setCustomMessage
-					;
-					
-					validityState.customError = customError;
-										
-					if( validityState.valid && validityState.customError ){
-						validityState.valid = false;
-					} else if(!validityState.valid) {
-						var allFalse = true;
-						$.each(validityState, function(name, prop){
-							if(prop){
-								allFalse = false;
-								return false;
-							}
-						});
-						
-						if(allFalse){
-							validityState.valid = true;
-						}
-						
-					}
-					
-					$.each(validityRules, function(rule, fn){
-						validityState[rule] = fn(jElm, val, cache, validityState);
-						if( validityState[rule] && (validityState.valid || (!setCustomMessage && overrideNativeMessages)) ) {
-							elem.setCustomValidity(webshims.createValidationMessage(elem, rule));
-							validityState.valid = false;
-							setCustomMessage = true;
-						}
-					});
-					if(validityState.valid){
-						elem.setCustomValidity('');
-					}
-					return validityState;
-				},
-				set: $.noop
+		webshims.defineNodeNamesProperty(validityElements, 'validity', {
+			get: function(elem){
 				
-			}, true);
+				var validity = elem.validity;
+				if(!validity){
+					return validity;
+				}
+				var validityState = {};
+				validityProps.forEach(function(prop){
+					validityState[prop] = validity[prop];
+				});
+				
+				if( !$.attr(elem, 'willValidate') ){
+					return validityState;
+				}
+				var jElm 			= $(elem),
+					cache 			= {type: (elem.getAttribute && elem.getAttribute('type') || '').toLowerCase(), nodeName: (elem.nodeName || '').toLowerCase()},
+					val				= oldVal.call(jElm),
+					customError 	= !!($.data(elem, 'hasCustomError')),
+					setCustomMessage
+				;
+				
+				validityState.customError = customError;
+									
+				if( validityState.valid && validityState.customError ){
+					validityState.valid = false;
+				} else if(!validityState.valid) {
+					var allFalse = true;
+					$.each(validityState, function(name, prop){
+						if(prop){
+							allFalse = false;
+							return false;
+						}
+					});
+					
+					if(allFalse){
+						validityState.valid = true;
+					}
+					
+				}
+				
+				$.each(validityRules, function(rule, fn){
+					validityState[rule] = fn(jElm, val, cache, validityState);
+					if( validityState[rule] && (validityState.valid || (!setCustomMessage && overrideNativeMessages)) ) {
+						elem.setCustomValidity(webshims.createValidationMessage(elem, rule));
+						validityState.valid = false;
+						setCustomMessage = true;
+					}
+				});
+				if(validityState.valid){
+					elem.setCustomValidity('');
+				}
+				return validityState;
+			},
+			set: $.noop
+			
 		});
 							
 		$.fn.val = function(val){
@@ -177,5 +195,5 @@ jQuery.webshims.ready('form-message form-core', function($, webshims, window, do
 		});
 		
 	} //end: overrideValidity -> (!supportRequiredSelect || !supportNumericDate || overrideNativeMessages)
-	webshims.isReady('form-extend', true);
-});
+	webshims.createReadyEvent('form-extend');
+}, true);

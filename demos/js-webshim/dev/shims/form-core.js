@@ -1,10 +1,7 @@
 //todo use $.globalEval?
 jQuery.webshims.gcEval = function(){
-	with(arguments[1] && arguments[1].form || window) {
-		with(arguments[1] || window){
-			return (function(){eval( arguments[0] );}).call(arguments[1] || window, arguments[0]);
-		}
-	}
+	"use strict";
+	return (function(){eval( arguments[0] );}).call(arguments[1] || window, arguments[0]);
 };
 jQuery.webshims.ready('es5', function($, webshims, window, doc, undefined){
 	"use strict";
@@ -55,7 +52,7 @@ jQuery.webshims.ready('es5', function($, webshims, window, doc, undefined){
 		
 	});
 	//better you use the selectors above
-	['valid', 'invalid', 'required', 'optional'].forEach(function(name){
+	['required', 'valid', 'invalid', 'optional'].forEach(function(name){
 		$.expr.filters[name] = $.expr.filters[name+"-element"];
 	});
 	
@@ -113,25 +110,42 @@ jQuery.webshims.ready('es5', function($, webshims, window, doc, undefined){
 	
 	
 	
-	webshims.triggerInlineForm = function(elem, event){
-		var attr = elem['on'+event] || elem.getAttribute('on'+event) || '';
-		var ret;
-		event = $.Event({
-			type: event,
-			target: elem[0],
-			currentTarget: elem[0]
-		});
-		
-		if(attr && typeof attr == 'string'){
-			ret = webshims.gcEval(attr, elem);
-		}
-		if(ret === false){
-			event.stopPropagation();
-			event.preventDefault();
-		}
-		$(elem).trigger(event);
-		return ret;
-	};
+	webshims.triggerInlineForm = (function(){
+		var stringify = function(id){
+			if(typeof id != 'string' || id.indexOf('-') !== -1 || id.indexOf('.') !== -1 || id.indexOf('"') !== -1){return '';}
+			return 'var '+ id +' = this.form["'+ id +'"];';
+		};
+		return function(elem, event){
+			var attr = elem['on'+event] || elem.getAttribute('on'+event) || '';
+			var ret;
+			event = $.Event({
+				type: event,
+				target: elem[0],
+				currentTarget: elem[0]
+			});
+			
+			if(attr && typeof attr == 'string' && elem.form && elem.form.elements){
+				var scope = '';
+				for(var i = 0, elems = elem.form.elements, len = elems.length; i < len; i++ ){
+					var name = elems[i].name;
+					var id = elems[i].id;
+					if(name){
+						scope += stringify(name);
+					}
+					if(id && id !== name){
+						scope += stringify(id);
+					}
+				}
+				ret = webshims.gcEval(scope + attr, elem);
+			}
+			if(ret === false){
+				event.stopPropagation();
+				event.preventDefault();
+			}
+			$(elem).trigger(event);
+			return ret;
+		};
+	})();
 	
 	
 	var setRoot = function(){
@@ -203,7 +217,7 @@ jQuery.webshims.ready('es5', function($, webshims, window, doc, undefined){
 				$(doc).bind('focusout.validityalert', boundHide);
 			},
 			getMessage: function(elem, message){
-				$('> span.va-box', alert).text(message || elem.attr('customValidationMessage') || elem.attr('validationMessage'));
+				$('> span.va-box', alert).text(message || elem.attr('x-moz-errormessage') || elem.attr('data-errormessage') || elem.attr('validationMessage'));
 			},
 			position: function(elem){
 				var offset = elem.offset();
@@ -278,8 +292,45 @@ jQuery.webshims.ready('es5', function($, webshims, window, doc, undefined){
 		});
 	})();
 	
-	webshims.isReady('form-core', true);
-});
+	(function(){
+		if(!support.validity || window.noHTMLExtFixes || support.fieldsetValidation){return;}
+		//safari 5.0.2 has serious issues with checkValidity in combination with setCustomValidity so we mimic checkValidity using validity-property (webshims.fix.checkValidity)
+		var checkValidity = function(elem){
+			var valid = ($.attr(elem, 'validity') || {valid: true}).valid;
+			if(!valid && elem.checkValidity && elem.checkValidity()){
+				$(elem).trigger('invalid');
+			}			
+			return valid;
+		};
+		var checkElems = ['fieldset'];
+		//safari has a stupid bug ToDo: make proper test for safari bug
+		if(!support.output){
+			checkElems = ['input', 'textarea', 'select', 'form', 'fieldset'];
+		}
+		
+		webshims.defineNodeNamesProperty(checkElems, 'checkValidity', {
+			value: function(){
+				if(this.elements || $.nodeName(this, 'fieldset')){
+					var ret = true;
+					$(this.elements || 'input, textarea, select', this)
+						.each(function(){
+							 if(!checkValidity(this)){
+								ret = false;
+							}
+						})
+					;
+					return ret;
+				} else if(this.checkValidity){
+					return checkValidity(this);
+				}
+			}
+		});
+		
+	})();
+	
+	
+	webshims.createReadyEvent('form-core');
+}, true);
 
 
 

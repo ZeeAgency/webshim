@@ -8,7 +8,10 @@
 	<script src="../js-webshim/minified/polyfiller.js"></script>
 	
     <script class="example">
-		//load all defined modules
+    	
+		//path is path of polyfiller.js + shims/
+    	$.webshims.loader.basePath += 'shims/';
+		//load all defined modules (look into features.js)
 		//or load only a specific feature with $.webshims.polyfill('feature-name');
 		$.webshims.polyfill();
         
@@ -149,11 +152,11 @@ $.webshims.addPolyfill('mediaelement', {
 <code class="block">
 //Implements a new property on audio, video called currentTime
 $.webshims.defineNodeNamesProperty('audio, video', 'currentTime', {
-	get: function(){
-		//your getter implementation (this refers to the element)
+	get: function(elem){
+		//your getter implementation (elem refers to the element)
 	},
-	set: function(value){
-		//your setter implementation (this refers to the element)
+	set: function(elem, value){
+		//your setter implementation (elem refers to the element)
 	}
 });
 
@@ -169,7 +172,7 @@ $.webshims.defineNodeNamesProperty('audio, video', 'play', {
 $.webshims.defineNodeNamesBooleanProperty('audio, video', 'controls', {
 	//set works more like an onSet:
 	//you don't have to set the value anymore on the domnode, only handle true/false values
-	set: function(value){
+	set: function(elem, value){
 		if(value){
 			//show controls for elem
 		} else {
@@ -181,7 +184,7 @@ $.webshims.defineNodeNamesBooleanProperty('audio, video', 'controls', {
 </code>
 		
 		<p>Here is a quick working example for implementing the details and summary elements.</p>
-		
+		<p>Webshims lib uses a sort of client-side browser-specific combination. This combinations aren't very flexible, but easy to use. If you want to develop, you can test the source-files by using <code>$.webshims.debug = true;</code>.</p>
 <code class="block">
 $.webshims.addPolyfill('details', {
 	test: function(){
@@ -196,9 +199,8 @@ $.webshims.addPolyfill('details', {
 	//override jQuery's attribute method for all details - elements...
 	//... in case of the open attribute
 	$.webshims.defineNodeNamesBooleanProperty('details', 'open', {
-		set: function(value){
+		set: function(elem, value){
 			//get polyfill-methods
-			var elem = this;
 			var polyfill = $.data(elem, 'detailsPolyfill');
 			//if we haven't polyfilled this element, then do it now
 			if(!polyfill){
@@ -233,7 +235,6 @@ $.webshims.addPolyfill('details', {
 	
 })(jQuery);
 </code>
-		<p>Webshims lib uses a sort of client-side browser-specific combination. This combinations aren't very flexible, but easy to use. If you want to develop, you can test the source-files by using <code>$.webshims.debug = true;</code>.</p>
 		</section>
 				
 		<small>

@@ -1,274 +1,71 @@
-(function($, window, document, undefined){
+(function($){
 	"use strict";
-	
-//	$.each(['jQuery', 'Modernizr', 'yepnope'], function(i, dependcy){
-//		if(!window[dependcy]){
-//			throw("you have to include "+ dependcy +" before webshims lib");
-//		}
-//	});
-	
-	
-	document.createElement('datalist');
-	
+	var doc = document;
+	var support = $.support;
 	var special = $.event.special;
+	var has = Object.prototype.hasOwnProperty;
+	var undefined;
 	
+	//simple shiv
+	//http://code.google.com/p/html5shim/
+	'abbr article aside audio canvas datalist details figcaption figure footer header hgroup mark meter nav output progress section source summary time track video'.replace(/\w+/g,function(n){doc.createElement(n);});
+	support.dynamicHTML5 =  !!($('<video><div></div></video>')[0].innerHTML);
+	
+	$('html').addClass('js-on').removeClass('js-off');
 	
 	$.webshims = {
-		
-		version: 'pre1.5.0',
-		cfg: {
-			useImportantStyles: true,
-			removeFOUC: true,
-			waitReady: true,
-			extendNative: false
-		},
+		version: '1.2.2',
+		useImportantStyles: true,
+		fix: {},
 		implement: {},
-		/*
-		 * some data
-		 */
-		modules: {}, features: {}, featureList: [],
-		addPolyfill: function(name, cfg){
-			cfg = cfg || {};
-			var feature = cfg.feature || name;
-			if(!webshims.features[feature]){
-				webshims.features[feature] = [];
-				webshims.featureList.push(feature);
-			}
-			webshims.features[feature].push(name);
-			
-			loader.addModule(name, cfg);
-			$.each(cfg.combination || [], function(i, combi){
-				if(!combinations[combi]){
-					combinations[combi] = [name];
-				} else {
-					combinations[combi].push(name);
-				}
-			});
-			if(cfg.methodNames){
-				if (!$.isArray(cfg.methodNames)) {
-					cfg.methodNames = [cfg.methodNames];
-				}
-				
-				$.each(cfg.methodNames, function(i, methodName){
-					webshims.addMethodName(methodName);
-				});
-			}
-		},
-		
-		polyfill: (function(){
-			var firstPolyfillCall = function(features){
-				var loadingTimer;
-				var addClass = [];
-				var removeLoader = function(){
-					$('html').removeClass('loading-polyfills long-loading-polyfills polyfill-remove-fouc');
-					$(window).unbind('load.loadingPolyfills error.loadingPolyfills');
-					clearTimeout(loadingTimer);
-				};
-				if(!$.isReady){
-					if(webshims.cfg.removeFOUC){
-						addClass.push('polyfill-remove-fouc');
-					}
-					addClass.push('loading-polyfills');
-					$(window).bind('load.loadingPolyfills error.loadingPolyfills', removeLoader);
-					loadingTimer = setTimeout(function(){
-						$('html').addClass('long-loading-polyfills');
-					}, 600);
-				} else {
-					webshims.warn('You should call $.webshims.polyfill before DOM-Ready');
-				}
-				onReady(features, removeLoader);
-				if(webshims.cfg.useImportantStyles){
-					addClass.push('polyfill-important');
-				}
-				if(addClass[0]){
-					$('html').addClass(addClass.join(' '));
-				}
-				$(window).load(function(){
-					loader.loadList(['html5a11y']);
-				});
-				loader.loadCSS('shim.css');
-				//remove function
-				firstPolyfillCall = $.noop;
-			};
-			
-			return function(features, fn){
-				var toLoadFeatures = [];
-				
-				features = features || webshims.featureList;
-				if(features == 'lightweight'){
-					features = webshims.light;
-				}
-				if (typeof features == 'string') {
-					features = features.split(' ');
-				}
-				
-				
-				if(fn || webshims.cfg.waitReady){
-					if(webshims.cfg.waitReady){
-						$.readyWait++;
-					}
-					onReady(features, function(){
-						if(webshims.cfg.waitReady){
-							$.ready(true);
-						}
-						if(fn){
-							fn($, webshims, window, document);
-						}
-					});
-				}
-				
-				$.each(features, function(i, feature){
-					if(feature !== webshims.features[feature][0]){
-						onReady(webshims.features[feature], function(){
-							isReady(feature, true);
-						});
-					}
-					toLoadFeatures = toLoadFeatures.concat(webshims.features[feature]);
-				});
-				
-				firstPolyfillCall(features);
-				loader.loadList(toLoadFeatures);
-				
-			};
-		})(),
-				
-		/*
-		 * handle ready modules
-		 */
-		
-		isReady: function(name, _set){
-			if(_set && webshims.waitReadys[name]){
-				webshims.waitReadys[name+'ReadyCall'] = true;
-				return false;
-			}
-			name = name+'Ready';
-			if(_set){
-				if(special[name] && special[name].add){return true;}
-					
-					special[name] = $.extend(special[name] || {}, {
-						add: function( details ) {
-							details.handler.call(this, $.Event(name));
-						}
-					});
-					$.event.trigger(name);
-			}
-			return !!(special[name] && special[name].add) || false;
-		},
-		waitReadys: {}, 
-		ready: function(events, fn /*, _created*/){
-			var _created = arguments[2];
-			if(typeof events == 'string'){
-				events = events.split(' ');
-			}
-			
-			if(!_created){
-				events = $.map(
-					$.grep(events, function(evt){
-						return !isReady(evt);
-					}), function(evt){
-						return evt +'Ready';
-					}
-				);
-			}
-			if(!events.length){
-				fn($, webshims, window, document);
-				return;
-			}
-			var readyEv = events.shift(),
-				readyFn = function(){
-					onReady(events, fn, true);
-				}
-			;
-			
-			$(document).one(readyEv, readyFn);
-		},
-		
-		/*
-		 * basic DOM-/jQuery-Helpers
-		 */
-		addMethodName: function(name){
-			if($.fn[name] && 'shim' in $.fn[name]){return;}
-			$.fn[name] = function(){
-				var args = arguments,
-					ret
-				;
-				this.each(function(){
-					var fn = $.attr(this, name);
-					if(fn && fn.apply){
-						ret = fn.apply(this, args);
-						if(ret !== undefined){
-							return false;
-						}
-					}
-				});
-				return (ret !== undefined) ? ret : this;
-			};
-		},
-		getID: (function(){
-			var ID = new Date().getTime();
-			return function(elem){
-				elem = $(elem);
-				var id = elem.attr('id');
-				if(!id){
-					ID++;
-					id = 'elem-id-'+ ID;
-					elem.attr('id', id);
-				}
-				return id;
-			};
-		})(),
 		fixHTML5: function(h){return h;},
-		capturingEvents: function(names/*, _maybePrevented */){
-			if(!document.addEventListener){return;}
-			var _maybePrevented = arguments[1];
-			if(typeof names == 'string'){
-				names = [names];
-			}
-			$.each(names, function(i, name){
-				var handler = function( e ) { 
-					e = $.event.fix( e );
-					
-					//this can be removed with jQuery 1.5
-					if(_maybePrevented){
-						var preventDefault = e.preventDefault;
-						e.preventDefault =  function(){
-							preventDefault.apply(this, arguments);
-							clearTimeout($.data(e.target, 'maybePrevented'+e.type));
-							$.data(e.target, 'maybePrevented'+e.type, setTimeout(function(){
-								$.removeData(e.target, 'maybePrevented'+e.type);
-							}, 90));
-							
-						};
-					}
-					//END: this can be removed with jQuery 1.5
-					return $.event.handle.call( this, e );
-				};
-				special[name] = special[name] || {};
-				if(special[name].setup || special[name].teardown){return;}
-				$.extend(special[name], {
-					setup: function() {
-						this.addEventListener(name, handler, true);
-					}, 
-					teardown: function() { 
-						this.removeEventListener(name, handler, true);
+		createReadyEvent: (function(){
+			var makeReady = function(triggerName, name, noForce){
+				
+				if(modules[name] || webshims.features[name]){
+					triggerName = triggerName +'Ready';
+				}
+				
+				if(special[triggerName] && special[triggerName].add){return;}
+				
+				special[triggerName] = $.extend(special[triggerName] || {}, {
+					add: function( details ) {
+						details.handler.call(this, $.Event(triggerName));
 					}
 				});
-			});
-		},
+				$.event.trigger(triggerName);
+			};
+			return function(names){
+				var noForce = arguments[1];
+				
+				if(!names){return;}
+				if(!$.isArray(names)){
+					names = [names];
+				}
+				
+				$.each(names, function(i, name){
+					if(noForce && modules[name] && modules[name].noAutoCallback ){return;}
+					makeReady(name+'SYS', name, noForce);
+					makeReady(name, name, noForce);
+				});
+			};
+		})(),
 		
-		/*
-		 * loader
-		 */
+		moduleList: [],
+		
+		modules: {},
+		
+		features: {},
+		
+		featureList: [],
+		
 		loader: {
 			
 			basePath: (function(){
-				var path = $('meta[name="polyfill-path"]').attr('content');
-				if(path){return path;}
-				var script = $('script');
-				
-				script = script[script.length - 1];
-				path = ((!$.browser.msie || document.documentMode >= 8) ? script.src : script.getAttribute("src", 4)).split('?')[0];
-				return path.slice(0, path.lastIndexOf("/") + 1) +'shims/';
+				var scripts = $('script'),
+					path 	= scripts[scripts.length - 1].src.split('?')[0]
+				;
+				return path.slice(0, path.lastIndexOf("/") + 1);
 			})(),
 			
 			combinations: {},
@@ -279,50 +76,19 @@
 			
 			loadList: (function(){
 				var loadedModules = [];
-				var moduleReady = function(name, list, toLoad){
-					if(isReady(name)){
-						return true;
-					}
-					var module = modules[name];
-					if(module){
-						if ('test' in module && module.test(list)) {
-							isReady(name, true);
-							return true;
-						} else if(toLoad && !isReady(name) && $.inArray(name, toLoad) == -1 && $.inArray(name, list) == -1){
-							toLoad.push(name);
-							return false;
-						}
-						return isReady(name);
-					} else if(webshims.features[name] && toLoad && name !== webshims.features[name][0]) {
-						onReady(webshims.features[name], function(){
-							isReady(name, true);
-						});
-						$.each(webshims.features[name], function(i, dependency){
-							if(!moduleReady(dependency, list) && $.inArray(dependency, toLoad) == -1 && $.inArray(dependency, list) == -1){
-								toLoad.push(dependency);
-							}
-						});
-					}
-					return true;
-				};
 				return function(list){
 					var toLoad = [];
 					
 					$.each(list, function(i, name){
 						var module = modules[name];
-						if (moduleReady(name, list)) {
+						if ('test' in module && module.test(list)) {
+							isReady(name);
 							return;
 						}
 						if (module.css) {
 							loader.loadCSS(module.css);
 						}
 						toLoad.push(name);
-						(module.dependencies &&
-							$.each(module.dependencies, function(i, dependency){
-								moduleReady(dependency, list, toLoad);
-							})
-						);
-						
 						if(module.loadInit){
 							module.loadInit();
 						}
@@ -376,7 +142,7 @@
 					if($.inArray(src, loadedSrcs) != -1){
 						return;
 					}
-					parent = parent || document.getElementsByTagName('head')[0] || document.body;
+					parent = parent || doc.getElementsByTagName('head')[0] || doc.body;
 					loadedSrcs.push(src);
 					$('<link rel="stylesheet" />')
 						.prependTo(parent)
@@ -395,7 +161,7 @@
 					if($.inArray(src, loadedSrcs) != -1){
 						return;
 					}
-					parent = parent || document.getElementsByTagName('head')[0] || document.body;
+					parent = parent || doc.getElementsByTagName('head')[0] || doc.body;
 					if(!parent || !parent.appendChild){
 						setTimeout(function(){
 							loader.loadScript(src, callback, name);
@@ -403,95 +169,337 @@
 						return;
 					}
 					
-					var script = document.createElement('script'),
-						timer,
+					var script = doc.createElement('script'),
 						onLoad = function(e){
-							if(e && e.type === 'error'){
-								webshims.warn('Error: could not find script @'+src +'| configure polyfill-path "$.webshims.loader.basePath" or by using markup: <meta name="polyfill-path" content="path/to/shimsfolder/" />');
-							}
+							
 							if(!this.readyState ||
 										this.readyState == "loaded" || this.readyState == "complete"){
 								script.onload =  null;
-								$(script).onerror = null;
+								script.onerror = null;
 								script.onreadystatechange = null;
 								if(callback){
 									callback(e, this);
 								}
+								isReady(name, true);
 								
-								if(name){
-									if(typeof name == 'string'){
-										name = name.split(' ');
-									}
-									$.each(name, function(i, name){
-										if(!modules[name]){return;}
-										if(modules[name].afterLoad){
-											modules[name].afterLoad();
-										}
-										if(!modules[name].noAutoCallback){
-											isReady(name, true);
-										} 
-									});
-									
-								}
 								script = null;
-								clearTimeout(timer);
 							}
 						}
 					;
 					script.setAttribute('async', 'async');
 					script.src = src;
-					timer = setTimeout(function(){
-						onLoad({type: 'error'});
-					}, 20000);
 					script.onload = onLoad;
-					$(script).one('error', onLoad);
+					script.onerror = onLoad;
 					script.onreadystatechange = onLoad;
 					parent.appendChild(script);
 					script.async = true;
-					
 					loadedSrcs.push(src);
 				};
 			})()
-		}
+		},
+		
+		ready: function(events, fn /*, _notQueued, _created*/){
+			var _created = arguments[3],
+				_notQueued 	= arguments[2]
+			;
+			if(typeof events == 'string'){
+				events = events.split(' ');
+			}
+			
+			if(!_created){
+				events = $.map(events, function(e){
+					var evt = e;
+					if(_notQueued && evt != 'ready'){
+						evt += 'SYS';
+					}
+					if(modules[e] || webshims.features[e]){
+						evt += 'Ready';
+					}
+					return evt;
+				});
+			}
+			
+			if(!events.length){
+				fn($, webshims, window, document);
+				return;
+			}
+			var readyEv = events.shift(),
+				readyFn = function(){
+					webshims.ready(events, fn, _notQueued, true);
+				}
+			;
+			
+			if(readyEv == 'ready'){
+				$(readyFn);
+			} else {
+				$(doc).one(readyEv, readyFn);
+			}
+		},
+		
+		capturingEvents: function(names/*, _maybePrevented */){
+			if(!doc.addEventListener){return;}
+			var _maybePrevented = arguments[1];
+			if(typeof names == 'string'){
+				names = [names];
+			}
+			$.each(names, function(i, name){
+				var handler = function( e ) { 
+					e = $.event.fix( e );
+					if(_maybePrevented){
+						var preventDefault = e.preventDefault;
+						e.preventDefault =  function(){
+							preventDefault.apply(this, arguments);
+							clearTimeout($.data(e.target, 'maybePrevented'+e.type));
+							$.data(e.target, 'maybePrevented'+e.type, setTimeout(function(){
+								$.removeData(e.target, 'maybePrevented'+e.type);
+							}, 90));
+							
+						};
+					}
+					return $.event.handle.call( this, e );
+				};
+				special[name] = special[name] || {};
+				if(special[name].setup || special[name].teardown){return;}
+				$.extend(special[name], {
+					setup: function() {
+						this.addEventListener(name, handler, true);
+					}, 
+					teardown: function() { 
+						this.removeEventListener(name, handler, true);
+					}
+				});
+			});
+		},
+		
+		defineNodeNamesProperty: function(names, prop, desc){
+			if(typeof names == 'string'){
+				names = names.split(/\s*,\s*/);
+			}
+			$.each(names, function(i, nodeName){
+				webshims.defineNodeNameProperty(nodeName, prop, desc);
+			});
+		},
+		contentAttr: function(elem, name, val){
+			if(!elem.nodeName){return;}
+			if(val === undefined){
+				val = elem.getAttribute(name);
+				return (val == null) ? undefined : val;
+			}
+			if(typeof val == 'boolean'){
+				if(!val){
+					elem.removeAttribute(name);
+				} else {
+					elem.setAttribute(name, name);
+				}
+			} else {
+				elem.setAttribute(name, val);
+			}
+		},
+		
+		defineNodeNamesBooleanProperty: function(elementNames, prop, setDesc){
+			
+			var desc = {
+				set: function(elem, val){
+					val = !!val;
+					elem[prop] = val;
+					webshims.contentAttr(elem, prop, val);
+					return val;
+				},
+				get: function(elem){
+					var val;
+					if(support.contentAttr && prop in elem){
+						val = !!elem[prop];
+					} else {
+						val = (webshims.contentAttr(elem, prop) != null);
+					}
+					return val;
+				}
+			};
+			webshims.defineNodeNamesProperty(elementNames, prop, desc);
+			if(setDesc){
+				webshims.onNodeNamesPropertyModify(elementNames, prop, setDesc);
+			}
+		},
+				
+		addMethodName: function(name){
+			if($.fn[name] && 'shim' in $.fn[name]){return;}
+			$.fn[name] = function(){
+				var args = arguments,
+					ret
+				;
+				this.each(function(){
+					var fn = $.attr(this, name);
+					if(fn && fn.apply){
+						ret = fn.apply(this, args);
+						if(ret !== undefined){
+							return false;
+						}
+					}
+				});
+				return (ret !== undefined) ? ret : this;
+			};
+		},
+		
+		addPolyfill: function(name, cfg){
+			cfg = cfg || {};
+			var feature 		= cfg.feature || name,
+				shims 			= webshims
+			;
+			if(!shims.features[feature]){
+				shims.features[feature] = [];
+				shims.featureList.push(feature);
+			}
+			shims.features[feature].push(name);
+			loader.addModule(name, cfg);
+			shims.moduleList.push(name);
+			$.each(cfg.combination || [], function(i, combi){
+				if(!combinations[combi]){
+					combinations[combi] = [name];
+				} else {
+					combinations[combi].push(name);
+				}
+			});
+			if(cfg.methodNames) {
+				if (!$.isArray(cfg.methodNames)) {
+					cfg.methodNames = [cfg.methodNames];
+				}
+				
+				$.each(cfg.methodNames, function(i, methodName){
+					webshims.addMethodName(methodName);
+				});
+			}
+		},
+		
+		polyfill: function(features, fn){
+			var shims 	= this,
+				loader 	= shims.loader,
+				toLoadFeatures = [],
+				removeLoader = function(){
+					$('html').removeClass('loading-polyfills long-loading-polyfills polyfill-remove-fouc');
+					$(window).unbind('load.loadingPolyfills error.loadingPolyfills');
+					clearTimeout(loadingTimer);
+				},
+				loadingTimer
+			;
+			
+			fn = fn || $.noop;
+			
+			features = features || shims.featureList;
+			if(features == 'lightweight'){
+				features = webshims.light;
+			}
+			if (typeof features == 'string') {
+				features = features.split(' ');
+			}
+			
+			
+			if(!$.isReady){
+				if(webshims.removeFOUC){
+					$('html').addClass('polyfill-remove-fouc');
+				}
+				$('html').addClass('loading-polyfills');
+				$(window).bind('load.loadingPolyfills error.loadingPolyfills', removeLoader);
+				loadingTimer = setTimeout(function(){
+					$('html').addClass('long-loading-polyfills');
+				}, 400);
+			}
+			webshims.ready(features, function(){
+				removeLoader();
+				fn($, webshims, window, document);
+			});
+			
+			$.each(features, function(i, feature){
+				if(feature !== shims.features[feature][0]){
+					shims.ready(shims.features[feature], function(){
+						isReady(feature);
+					}, true);
+				}
+				toLoadFeatures = toLoadFeatures.concat(shims.features[feature]);
+			});
+			
+			if(webshims.useImportantStyles){
+				$('html').addClass('polyfill-important');
+				webshims.useImportantStyles = false;
+			}
+			loader.loadCSS('shim.css');
+			loader.loadList(toLoadFeatures);
+			$(function(){
+				loader.loadList(['html5a11y']);
+			});
+		},
+		getID: (function(){
+			var ID = new Date().getTime();
+			return function(elem){
+				elem = $(elem);
+				var id = elem.attr('id');
+				if(!id){
+					ID++;
+					id = 'elem-id-'+ ID;
+					elem.attr('id', id);
+				}
+				return id;
+			};
+		})(),
+		activeLang: (function(){
+			var langs = [navigator.browserLanguage || navigator.language || ''];
+			var paLang = $('html').attr('lang');
+			var timer;
+			
+			if(paLang){
+				langs.push(paLang);
+			}
+			return function(lang, module, fn){
+				if(lang){
+					if(!module || !fn){
+						if(lang !== langs[0]){
+							langs[0] = lang;
+							clearTimeout(timer);
+							timer = setTimeout(function(){
+								$(doc).triggerHandler('htmlExtLangChange', langs);
+							}, 9);
+						}
+					} else {
+						module = modules[module].options;
+						var langObj = lang,
+							loadRemoteLang = function(lang){
+								if($.inArray(lang, remoteLangs) !== -1){
+									loader.loadScript(module.langSrc+lang+'.js', function(){
+										if(langObj[lang]){
+											fn(langObj[lang]);
+										}
+									});
+									return true;
+								}
+								return false;
+							},
+							remoteLangs = module && module.availabeLangs
+						;
+						
+						$.each(langs, function(i, lang){
+							var shortLang = lang.split('-')[0];
+							if(langObj[lang] || langObj[shortLang]){
+								fn(langObj[lang] || langObj[shortLang]);
+								return false;
+							}
+							if(remoteLangs && module.langSrc && (loadRemoteLang(lang) || loadRemoteLang(shortLang))){
+								return false;
+							}
+						});
+					}
+				}
+				return langs;
+			};
+		})()
 	};
 	
-	/*
-	 * shortcuts
-	 */
-	var webshims = $.webshims;
-	var isReady = webshims.isReady;
-	var onReady = webshims.ready;
-	var addPolyfill = webshims.addPolyfill;
-	var modules = webshims.modules;
-	var loader = webshims.loader;
-	var combinations = loader.combinations;
-	var support = $.support;
-	
-	$.each(['log', 'error', 'warn', 'info'], function(i, fn){
-		webshims[fn] = function(message){
-			if(webshims.debug && window.console && console.log){
-				return console[(console[fn]) ? fn : 'log'](message);
-			}
-		};
-	});
-	
-	
-	 
-	
-	
-	/*
-	 * jQuery-plugins for triggering dom updates can be also very usefull in conjunction with non-HTML5 DOM-Changes (AJAX)
-	 * Example:
-	 * $.webshims.addReady(function(context, insertedElement){
-	 * 		$('div.tabs', context).add(insertedElement.filter('div.tabs')).tabs();
-	 * });
-	 * 
-	 * $.ajax({
-	 * 		success: function(html){
-	 * 			$('#main').htmlWebshim(html);
-	 * 		}
-	 * });
-	 */
+	var webshims 		= $.webshims,
+		isReady 		= webshims.createReadyEvent,
+		loader 			= webshims.loader,
+		modules 		= webshims.modules,
+		combinations 	= loader.combinations,
+		addPolyfill 	= webshims.addPolyfill,
+		extendedProps 	= webshims.extendedProps
+	;
 	
 	(function(){
 		var readyFns = [];
@@ -499,10 +507,10 @@
 		$.extend(webshims, {
 			addReady: function(fn){
 				var readyFn = function(context, elem){
-					onReady('DOM', function(){fn(context, elem);});
+					$(function(){fn(context, elem);});
 				};
 				readyFns.push(readyFn);
-				readyFn(document, emptyJ);
+				readyFn(doc, emptyJ);
 			},
 			triggerDomUpdate: function(context){
 				if(!context || !context.nodeType){return;}
@@ -515,53 +523,232 @@
 			}
 		});
 		
-		$.fn.htmlWebshim = function(a){
-			var ret = this.html((a) ? webshims.fixHTML5(a) : a);
-			if(ret === this && $.isReady){
-				this.each(function(){
-					if(this.nodeType == 1){
-						webshims.triggerDomUpdate(this);
+		webshims.defineNodeNameProperty = (function(){
+			var oldAttr = $.attr;
+			var extendedProps = {};
+			var modifyProps = {};
+			
+			$.attr = function(elem, name, value, arg1, arg3){
+				var nodeName = (elem.nodeName || '').toLowerCase();
+				if(!nodeName || elem.nodeType !== 1){return oldAttr(elem, name, value, arg1, arg3);}
+				var desc = extendedProps[nodeName];
+				var handeld;
+				var ret;
+								
+				if(desc){
+					desc = desc[name];
+				}
+				if(!desc){
+					desc = extendedProps['*'];
+					if(desc){
+						desc = desc[name];
 					}
-				});
-			}
-			return ret;
-		};
-		
-		$.each(['after', 'before', 'append', 'prepend'], function(i, name){
-			$.fn[name+'Webshim'] = function(a){
-				var elems = $(webshims.fixHTML5(a));
-				this[name](elems);
-				if($.isReady){
-					elems.each(function(){
-						if (this.nodeType == 1) {
-							webshims.triggerDomUpdate(this);
-						}
+				}
+				
+				// we got a winner
+				if(desc){
+					if(value === undefined){
+						return (desc.get) ? desc.get(elem) : desc.value; 
+					} else if(desc.set) {
+						ret = desc.set(elem, value);
+						handeld = true;
+					}
+				}
+				if(!handeld){
+					ret = oldAttr(elem, name, value, arg1, arg3);
+				}
+				if(value !== undefined && modifyProps[nodeName] && modifyProps[nodeName][name]){
+					$.each(modifyProps[nodeName][name], function(i, fn){
+						fn(elem, value);
 					});
 				}
-				return this;
+				return ret;
 			};
-		});
-		
-		$.isDOMReady = $.isReady;
-		if(!$.isDOMReady){
-			var $Ready = $.ready;
-			$.ready = function(unwait){
-				if(unwait !== true && !$.isDOMReady && document.body){
-					$.isDOMReady = true;
-					isReady('DOM', true);
-					$.ready = $Ready;
+			
+			
+			webshims.onNodeNamesPropertyModify = function(nodeNames, prop, desc){
+				if(typeof nodeNames == 'string'){
+					nodeNames = nodeNames.split(/\s*,\s*/);
 				}
-				return $Ready.apply(this, arguments);
+				if($.isFunction(desc)){
+					desc = {set: desc};
+				}
+				$.each(nodeNames, function(i, name){
+					if(!modifyProps[name]){
+						modifyProps[name] = {};
+					}
+					if(!modifyProps[name][prop]){
+						modifyProps[name][prop] = [];
+					}
+					if(desc.set){
+						modifyProps[name][prop].push(desc.set);
+					}
+					if(desc.init){
+						initProp(name, prop);
+					}
+				});
 			};
-		} else {
-			isReady('DOM', true);
-		}
+			
+			
+			var initProp = (function(){
+				var initProps = {};
+				var isReady;
+				webshims.addReady(function(context, contextElem){	
+					nodeNameCache = {};
+					$.each(initProps, function(name, props){
+						var elems = $(context.getElementsByTagName(name));
+						if(contextElem[0] && $.nodeName(contextElem[0], name)){
+							elems = elems.add(contextElem);
+						}
+						$.each(props, function(i, prop){
+							elems.filter('['+ prop +']').attr(prop, function(i, val){
+								return val;
+							});
+						});
+					});
+					isReady = true;
+				});
+				return function(nodeName, prop){
+					
+					if(!initProps[nodeName]){
+						initProps[nodeName] = [prop];
+					} else {
+						initProps[nodeName].push(prop);
+					}
+					if(isReady){
+						$( document.getElementsByTagName(nodeName) ).filter('['+ prop +']').attr(prop, function(i, val){
+							return val;
+						});
+					}
+				};
+			})();
+			
+			return function(nodeName, prop, desc){
+				desc = $.extend({writeable: true}, desc);
+				
+				if(!extendedProps[nodeName]){
+					extendedProps[nodeName] = {};
+				}
+				var oldDesc = extendedProps[nodeName][prop];
+				var getSup = function(propName, descriptor){
+					if(descriptor && descriptor[propName]){
+						return descriptor[propName];
+					}
+					return function(elem, value){
+						return oldAttr(elem, prop, value);
+					};
+				};
+				extendedProps[nodeName][prop] = desc;
+				if(desc.value === undefined){
+					if(!desc.set){
+						desc.set = desc.writeable ? getSup('set', desc) : function(){throw(prop +'is readonly on '+ nodeName);};
+					}
+					if(!desc.get){
+						desc.get = getSup('get', desc);
+					}
+					
+				}
+				
+				$.each(['value', 'get', 'set'], function(i, descProp){
+					if(desc[descProp]){
+						desc[descProp]._polyfilled = getSup(descProp, oldDesc);
+					}
+				});
+				if(desc.init){
+					initProp(nodeName, prop);
+				} 
+				return desc;
+			};
+		})();
+		
 		
 	})();
 	
-	//this might be extended by ES5 shim feature
+	$.fn.htmlWebshim = function(a){
+		var ret = this.html((a) ? webshims.fixHTML5(a) : a);
+		if(ret === this && $.isReady){
+			this.each(function(){
+				webshims.triggerDomUpdate(this);
+			});
+		}
+		return ret;
+	};
+	
+	$.each(['after', 'before', 'append', 'prepend'], function(i, name){
+		$.fn[name+'Webshim'] = function(a){
+			var elems = $(webshims.fixHTML5(a));
+			this[name](elems);
+			if($.isReady){
+				elems.each(function(){
+					webshims.triggerDomUpdate(this);
+				});
+			}
+			return this;
+		};
+	});
+		
+	isReady('htmlExtLangChange', true);
+	
+	/*
+	 * Start Features 
+	 */
+	
+	/* general modules */
+	/* change path $.webshims.modules[moduleName].src */
+	var browserVersion = parseFloat($.browser.version, 10);
+	loader.addModule('html5a11y', {
+		src: 'html5a11y',
+		test: function(){
+			return !(($.browser.msie && browserVersion < 10 && browserVersion > 7) || ($.browser.mozilla && browserVersion < 2) || ($.browser.webkit && browserVersion < 540));
+		}
+	});
+	
+	loader.addModule('jquery-ui', {
+		src: 'http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.5/jquery-ui.min.js',
+		test: function(){return !!($.widget && $.Widget);}
+	});
+	
+	loader.addModule('input-widgets', {
+		src: '',
+		test: function(){
+			return !($.widget && !($.datepicker || $.fn.slider));
+		}
+	});
+	
+	loader.addModule('swfobject', {
+		src: 'http://ajax.googleapis.com/ajax/libs/swfobject/2.2/swfobject.js',
+		test: function(){return ('swfobject' in window);}
+	});
+	
+	var testElem = $('<div />')[0];
+	
+	/* 
+	 * polyfill-Modules 
+	 */
+	
+	// webshims lib uses a of http://github.com/kriskowal/es5-shim/ to implement
+	var es5 = [];
+	es5.push( !!(Array.isArray && Object.keys && Object.create && Function.prototype.bind && Object.defineProperties && !isNaN( Date.parse("T00:00") )) );
+	es5.push( !!(String.prototype.trim && Date.now && Date.prototype.toISOString) );
+	
+	if(es5[1]){
+		$.each(['filter', 'map', 'every', 'reduce', 'reduceRight', 'lastIndexOf'], function(i, name){
+			if(!Array.prototype[name]){
+				es5[1] = false;
+				return false;
+			}
+		});
+	}
+	support.es5 = (es5[0] && es5[1]);
+	
+	support.advancedObjectProperties = !!(Object.create && Object.defineProperties && Object.getOwnPropertyDescriptor);
+	support.objectAccessor = !!( support.advancedObjectProperties || (Object.prototype.__defineGetter__ && Object.prototype.__lookupSetter__));
+	support.domAccessor = !!( support.advancedObjectProperties || (Object.prototype.__defineGetter__ && Object.prototype.__lookupSetter__) ||  (Object.defineProperty && Object.getOwnPropertyDescriptor));
+	
+	testElem.setAttribute('dataHttpAttr', ':-)');
+	support.contentAttr = !(testElem.dataHttpAttr);
+	
 	(function(){
-		var has = Object.prototype.hasOwnProperty;
 		var descProps = ['configurable', 'enumerable', 'writable'];
 		var extendUndefined = function(prop){
 			for(var i = 0; i < 3; i++){
@@ -600,75 +787,9 @@
 			return Object.defineProperties(obj, props);
 		};
 		webshims.getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
-		
-		webshims.getPrototypeOf = Object.getPrototypeOf;
 	})();
 	
-	
-
-	
-	/*
-	 * Start Features 
-	 */
-	
-	/* general modules */
-	/* change path $.webshims.modules[moduleName].src */
-	var browserVersion = parseFloat($.browser.version, 10);
-	var httpProtocol = (location.protocol == 'https:') ? 'https:' : 'http:';
-	loader.addModule('html5a11y', {
-		src: 'html5a11y',
-		test: function(){
-			return !(($.browser.msie && browserVersion < 10 && browserVersion > 7) || ($.browser.mozilla && browserVersion < 2) || ($.browser.webkit && browserVersion < 540));
-		}
-	});
-	
-	loader.addModule('jquery-ui', {
-		src: httpProtocol+'//ajax.googleapis.com/ajax/libs/jqueryui/1.8.5/jquery-ui.min.js',
-		test: function(){return !!($.widget && $.Widget);}
-	});
-	
-	loader.addModule('input-widgets', {
-		src: '',
-		test: function(){
-			//ToDo: add spinner
-			return !($.widget && !($.fn.datepicker || $.fn.slider));
-		}
-	});
-	
-	loader.addModule('swfobject', {
-		src: httpProtocol+'//ajax.googleapis.com/ajax/libs/swfobject/2.2/swfobject.js',
-		test: function(){return ('swfobject' in window);}
-	});
-	
 		
-	var testElem = $('<div />')[0];
-	
-	/* 
-	 * polyfill-Modules 
-	 */
-	
-	// webshims lib uses a of http://github.com/kriskowal/es5-shim/ to implement
-	var es5 = [];
-	es5.push( !!(Array.isArray && Object.keys && Object.create && Function.prototype.bind && Object.defineProperties && !isNaN( Date.parse("T00:00") )) );
-	es5.push( !!(String.prototype.trim && Date.now && Date.prototype.toISOString) );
-	
-	if(es5[1]){
-		$.each(['filter', 'map', 'every', 'reduce', 'reduceRight', 'lastIndexOf'], function(i, name){
-			if(!Array.prototype[name]){
-				es5[1] = false;
-				return false;
-			}
-		});
-	}
-	support.es5 = (es5[0] && es5[1]);
-	
-	support.advancedObjectProperties = !!(Object.create && Object.defineProperties && Object.getOwnPropertyDescriptor);
-	support.objectAccessor = !!( support.advancedObjectProperties || (Object.prototype.__defineGetter__ && Object.prototype.__lookupSetter__));
-	support.domAccessor = !!( support.advancedObjectProperties || (Object.prototype.__defineGetter__ && Object.prototype.__lookupSetter__) ||  (Object.defineProperty && Object.getOwnPropertyDescriptor));
-	support.dhtmlBehavior = !!(testElem.addBehavior);
-	testElem.setAttribute('dataContentAttr', ':-)');
-	support.contentAttr = !(testElem.dataContentAttr);
-	
 	addPolyfill('es5-1', {
 		feature: 'es5',
 		test: function(){
@@ -686,23 +807,6 @@
 	});
 	
 	
-	addPolyfill('dom-extend', {
-		feature: 'dom-support',
-		noAutoCallback: true,
-		dependencies: ['es5'],
-		//no test = always load
-		combination: ['combined-ie7', 'combined-ie8', 'combined-ie9', 'combined-ff3', 'combined-ff4', 'combined-ie7-light', 'combined-ie8-light', 'combined-ie9-light', 'combined-ff3-light', 'combined-webkit']
-	});
-	
-	//ToDo: This should be part of dom-extend
-	support.dynamicHTML5 =  !!($('<video><div></div></video>')[0].innerHTML);
-	addPolyfill('html5shiv', {
-		feature: 'dom-support',
-		test: function(){
-			return support.dynamicHTML5;
-		},
-		combination: ['combined-ie7', 'combined-ie8', 'combined-ie7-light', 'combined-ie8-light']
-	});
 	
 	/* geolocation */
 	support.geolocation = ('geolocation'  in navigator);
@@ -711,76 +815,21 @@
 			return support.geolocation;
 		},
 		options: {destroyWrite: true},
-		dependencies: ['json-storage'],
 		combination: ['combined-ie7', 'combined-ie8', 'combined-ie9', 'combined-ie7-light', 'combined-ie8-light', 'combined-ie9-light']
 	});
 	/* END: geolocation */
 	
 	/* canvas */
-	webshims.canvasImplementation = 'excanvas'; //default: excanvas | flash | flashpro
 	support.canvas = ('getContext'  in $('<canvas />')[0]);
-	(function(){
-		var flashCanvas = window.FlashCanvas;
-		addPolyfill('canvas', {
-			src: 'excanvas',
-			test: function(){
-				return false && support.canvas;
-			},
-			noAutoCallback: true,
-			loadInit: function(){
-				var mod = this;
-				if(webshims.canvasImplementation && webshims.canvasImplementation.indexOf('flash') !== -1){
-					window.FlashCanvas = window.FlashCanvas || {};
-					flashCanvas = window.FlashCanvas;
-					if(webshims.canvasImplementation == 'flash'){
-						$.extend(flashCanvas, {swfPath: loader.basePath + 'FlashCanvas/'});
-						mod.src = 'FlashCanvas/flashcanvas';
-					} else {
-						$.extend(flashCanvas, {swfPath: loader.basePath + 'FlashCanvasPro/'});
-						mod.src = 'FlashCanvasPro/flashcanvas';
-					}
-				}
-			},
-			afterLoad: function(){
-				
-				webshims.ready('dom-extend', function($, webshims, window, doc){
-					webshims.defineNodeNameProperty('canvas', 'getContext', {
-						value: function(ctxName){
-							if(!this.getContext){
-								G_vmlCanvasManager.initElement(this);
-							}
-							return this.getContext(ctxName);
-						}
-					});
-							
-					webshims.addReady(function(context, elem){
-						if(doc === context){
-							if(flashCanvas && window.FlashCanvas){
-								FlashCanvas.setOptions(flashCanvas);
-							}
-							$('canvas').each(function(){
-								if(!this.getContext){
-									window.G_vmlCanvasManager && G_vmlCanvasManager.initElement(this);
-								} else {
-									return false;
-								}
-							});
-							isReady('canvas', true);
-							return;
-						}
-						$('canvas', context).add(elem.filter('canvas')).each(function(){
-							if(!this.getContext){
-								G_vmlCanvasManager.initElement(this);
-							}
-						});
-					});
-				});
-			},
-			methodNames: ['getContext'],
-			dependencies: ['es5', 'dom-support']
-		});
-	})();
 	
+	addPolyfill('canvas', {
+		test: function(){
+			return support.canvas;
+		},
+		noAutoCallback: true,
+		methodNames: ['getContext'],
+		combination: ['combined-ie7', 'combined-ie8', 'combined-ie7-light', 'combined-ie8-light']
+	});
 	/* END: canvas */
 	
 	/*
@@ -789,43 +838,56 @@
 	
 	/* html5 constraint validation */
 	
+	
+	/* bugfixes, validation-message + fieldset.checkValidity pack */
 	webshims.validityMessages = [];
 	webshims.inputTypes = {};
 	
 	(function(){
-		var form = $('<form action="#"><input name="a" required /><select><option>y</option></select></form>'),
+		var form = $('<form action="#"><fieldset><input name="a" required /><select><option>y</option></select></fieldset></form>'),
+			field = $('fieldset', form)[0],
 			range = $('<input type="range" />')[0],
 			date = $('<input type="date" />')[0]
 		;
 		
 		support.validity = ('checkValidity' in form[0]);
-		if(support.validity){
-			form.appendTo('head');
-		}
 		support.validationMessage = !!($('input', form).attr('validationMessage'));
+		support.fieldsetValidation = !!(field.elements && field.checkValidity && 'disabled' in field && !field.checkValidity() );
+		support.output = !!( 'value' in doc.createElement('output') );
+		support.datalistProp = ('list' in $('input', form)[0] && 'options' in document.createElement('datalist'));
+		support.datalist = (support.datalistProp && window.HTMLDataListElement);
+		support.numericDateProps = (range.type == 'range' && date.type == 'date');
+		support.requiredSelect = ('required' in $('select', form)[0]);
 		
-		support.output = !!(support.validity && 'value' in document.createElement('output') );
-		support.requiredSelect = (support.validity && 'required' in $('select', form)[0]);
-		support.datalistProp = (support.validity && 'list' in $('input', form)[0] && 'options' in document.createElement('datalist'));
-		support.datalist = !!(support.datalistProp && window.HTMLDataListElement);
-		support.numericDateProps = (support.validity && range.type == 'range' && date.type == 'date');
-		
-		
-		support.rangeUI = support.numericDateProps && Modernizr.inputtypes.range;
-		support.dateUI = support.numericDateProps && Modernizr.inputtypes.date;
-		
-		if(support.validity){
-			form.remove();
+		support.rangeUI = support.numericDateProps;
+		support.dateUI = support.numericDateProps;
+		if(window.Modernizr){
+			support.rangeUI = Modernizr.inputtypes.range;
+			support.dateUI = Modernizr.inputtypes.date;
 		}
+		
 		form = null;
+		field = null;
 		range = null;
 		date = null;
 	})();
-		
+	
+	//ToDo: these assumption aren't used yet || we have to wait till these bug are fixed
+	//Bug in Safari 5.0.2 and Chrome 7
+//	webshims.fix.interactiveValidation = ($.browser.webkit && !support.requiredSelect && !support.output);
+//	//Bug in Safari 5.0.2 (isn't used yet)
+//	webshims.fix.checkValidity = webshims.fix.interactiveValidation;
+//	//Bug in Safari 5.0.2, Chrome 7 and Opera 10
+//	webshims.fix.submission = ((window.opera && !support.requiredSelect) || webshims.fix.interactiveValidation);
+	
 	addPolyfill('form-core', {
 		feature: 'forms',
 		noAutoCallback: true,
-		dependencies: ['es5'],
+		loadInit: function(){
+			setTimeout(function(){
+				webshims.polyfill(['es5']);
+			}, 0);
+		},
 		//no test = always load
 		combination: ['combined-ie7', 'combined-ie8', 'combined-ie9', 'combined-ff3', 'combined-ff4', 'combined-ie7-light', 'combined-ie8-light', 'combined-ie9-light', 'combined-ff3-light', 'combined-webkit']
 	});
@@ -833,11 +895,9 @@
 	addPolyfill('form-message', {
 		feature: 'forms',
 		test: function(toLoad){
-			return (support.validationMessage && !webshims.implement.customValidationMessage && modules['form-extend'].test(toLoad) );
+			return (support.validity && support.validationMessage && !webshims.implement.customValidationMessage && modules['form-extend'].test(toLoad) );
 		},
 		options: {},
-		dependencies: ['dom-support'],
-		noAutoCallback: true,
 		combination: ['combined-ie7', 'combined-ie8', 'combined-ie9', 'combined-ff3', 'combined-ff4', 'combined-ie7-light', 'combined-ie8-light', 'combined-ie9-light', 'combined-ff3-light', 'combined-webkit']
 	});
 	
@@ -853,7 +913,11 @@
 			test: function(toLoad){
 				return (support.requiredSelect && support.validationMessage && (support.numericDateProps || $.inArray('form-number-date', toLoad) == -1) && !webshims.overrideValidationMessages );
 			},
-			dependencies: ['dom-support'],
+			loadInit: function(){
+				setTimeout(function(){
+					loader.loadList(['form-message']);
+				}, 0);
+			},
 			methodNames: ['setCustomValidity','checkValidity'],
 			combination: ['combined-ff4', 'combined-webkit']
 		});
@@ -861,40 +925,30 @@
 		addPolyfill('form-native-fix', {
 			feature: 'forms',
 			test: function(){return support.requiredSelect && support.validationMessage && support.output && support.datalist;},
-			dependencies: ['dom-support'],
 			combination: ['combined-webkit']
 		});
 		
 	} else {
-		//this also serves as base for non capable browsers
 		addPolyfill('form-extend', {
 			feature: 'forms',
 			src: 'form-shim-extend',
 			noAutoCallback: true,
+			test: function(){
+				return false;
+			},
 			methodNames: ['setCustomValidity','checkValidity'],
-			dependencies: ['dom-support'],
 			combination: ['combined-ie7', 'combined-ie8', 'combined-ie9', 'combined-ff3', 'combined-ie7-light', 'combined-ie8-light', 'combined-ie9-light', 'combined-ff3-light']
 		});
 	}
 	
-	
-	addPolyfill('form-output-datalist', {
-		feature: 'forms',
-		noAutoCallback: true,
-		test: function(){
-			return support.output && support.datalist;
-		},
-		dependencies: ['dom-support', 'json-storage'],
-		combination: ['combined-ie7', 'combined-ie8', 'combined-ie9', 'combined-ff3', 'combined-ie7-light', 'combined-ie8-light', 'combined-ie9-light', 'combined-ff3-light']
-	});
-	
 	addPolyfill('form-number-date', {
 		feature: 'forms-ext',
 		noAutoCallback: true,
-		dependencies: ['es5', 'forms', 'json-storage', 'dom-support'],
+		
 		test: function(){
 			return support.numericDateProps;
 		},
+		
 		combination: ['combined-ie7', 'combined-ie8', 'combined-ie9', 'combined-ff3', 'combined-ff4'],
 		options: {stepArrows: {number: 1, time: 1}, calculateWidth: true}
 	});
@@ -907,7 +961,6 @@
 		test: function(){return (support.rangeUI && support.dateUI && !modules.inputUI.options.replaceNative);},
 		combination: ['combined-ie7', 'combined-ie8', 'combined-ie9', 'combined-ff3', 'combined-ff4'],
 		noAutoCallback: true,
-		dependencies: ['es5', 'forms','dom-support'],
 		loadInit: function(){
 			loader.loadList(['jquery-ui']);
 			if(modules['input-widgets'].src){
@@ -925,17 +978,23 @@
 	});
 	
 	
+	addPolyfill('form-output-datalist', {
+		feature: 'forms',
+		noAutoCallback: true,
+		test: function(){
+			return support.output && support.datalist;
+		},
+		combination: ['combined-ie7', 'combined-ie8', 'combined-ie9', 'combined-ff3', 'combined-ie7-light', 'combined-ie8-light', 'combined-ie9-light', 'combined-ff3-light']
+	});
+	
 	if($.support.datalistProp){
-		onReady('dom-extend', function(){
-			$.webshims.defineNodeNameProperty('input', 'list', {
-				set: function(value){
-					var elem = this;
-					if(value && value.getAttribute){
-						value = $.webshims.getID(value);
-					}
-					elem.setAttribute('list', value);
+		$.webshims.defineNodeNameProperty('input', 'list', {
+			set: function(elem, value){
+				if(value && value.getAttribute){
+					value = $.webshims.getID(value);
 				}
-			});
+				elem.setAttribute('list', value);
+			}
 		});
 	}
 	
@@ -947,7 +1006,6 @@
 		test: function(){
 			return support.placeholder;
 		},
-		noAutoCallback: true,
 		combination: ['combined-ie7', 'combined-ie8', 'combined-ie9', 'combined-ff3', 'combined-ie7-light', 'combined-ie8-light', 'combined-ie9-light', 'combined-ff3-light']
 	});
 	/* END: placeholder */
@@ -968,8 +1026,14 @@
 		combination: ['combined-ie7', 'combined-ie7-light']
 	});
 	
+	addPolyfill('html5shiv', {
+		test: function(){
+			return support.dynamicHTML5;
+		},
+		combination: ['combined-ie7', 'combined-ie8', 'combined-ie7-light', 'combined-ie8-light']
+	});
 	/* END: json + loacalStorage */
 	//predefined list without input type number/date/time etc.
-	webshims.light = ['es5', 'canvas', 'geolocation', 'forms', 'json-storage'];
+	webshims.light = ['es5', 'html5shiv', 'canvas', 'geolocation', 'forms', 'json-storage'];
 	
-})(jQuery, this, this.document);
+})(jQuery);

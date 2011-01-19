@@ -114,16 +114,15 @@ jQuery.webshims.ready('form-extend', function($, webshims, window){
 	});
 	
 	//IDLs and methods, that aren't part of constrain validation, but strongly tight to it
-	var valueAsNumberDescriptor = webshims.defineNodeNameProperty('input', 'valueAsNumber', {
-		get: function(){
-			var elem = this;
+	
+	var valueAsNumberDescriptor = {
+		get: function(elem){
 			var type = getType(elem);
 			return (typeModels[type] && typeModels[type].asNumber) ? 
 				typeModels[type].asNumber($.attr(elem, 'value')) :
 				nan;
 		},
-		set: function(val){
-			var elem = this;
+		set: function(elem, val){
 			var type = getType(elem);
 			if(typeModels[type] && typeModels[type].numberToString){
 				//is NaN a number?
@@ -138,21 +137,19 @@ jQuery.webshims.ready('form-extend', function($, webshims, window){
 					throw('INVALID_STATE_ERR: DOM Exception 11');
 				}
 			} else {
-				valueAsNumberDescriptor._supset && valueAsNumberDescriptor._supset.call(elem, arguments);
+				valueAsNumberDescriptor.set._polyfilled(elem, arguments);
 			}
 		}
-	}, true, 'input-date-number', 'form-number-date');
+	};
 	
-	var valueAsDateDescriptor = webshims.defineNodeNameProperty('input', 'valueAsDate', {
-		get: function(){
-			var elem = this;
+	var valueAsDateDescriptor = {
+		get: function(elem){
 			var type = getType(elem);
 			return (typeModels[type] && typeModels[type].asDate && !typeModels[type].noAsDate) ? 
 				typeModels[type].asDate($.attr(elem, 'value')) :
-				valueAsDateDescriptor._supget && valueAsDateDescriptor._supget.call(elem);
+				valueAsDateDescriptor.get_polyfilled.call(elem);
 		},
-		set: function(value){
-			var elem = this;
+		set: function(elem, value){
 			var type = getType(elem);
 			if(typeModels[type] && typeModels[type].dateToString){
 				if(!window.noHTMLExtFixes) {
@@ -170,10 +167,14 @@ jQuery.webshims.ready('form-extend', function($, webshims, window){
 					throw('INVALID_STATE_ERR: DOM Exception 11');
 				}
 			} else {
-				return valueAsDateDescriptor._supset && valueAsDateDescriptor._supset(elem, arguments) || null;
+				return valueAsDateDescriptor.set._polyfilled(elem, arguments);
 			}
 		}
-	}, true, 'input-date-number', 'form-number-date');
+	};
+	
+	webshims.defineNodeNameProperty('input', 'valueAsNumber', valueAsNumberDescriptor);
+	webshims.defineNodeNameProperty('input', 'valueAsDate', valueAsDateDescriptor);
+	
 	
 	var typeProtos = {
 		
@@ -365,14 +366,12 @@ jQuery.webshims.ready('form-extend', function($, webshims, window){
 	
 	// add support for new input-types
 	webshims.defineNodeNameProperty('input', 'type', {
-		get: function(){
-			var elem = this;
+		get: function(elem){
 			var type = getType(elem);
 			return (webshims.inputTypes[type]) ? type : elem.type || elem.getAttribute('type');
-		},
-		set: $.noop
+		}
 	});
 	
-	webshims.isReady('form-number-date', true);
+	webshims.createReadyEvent('form-number-date');
 	
-});
+}, true);
