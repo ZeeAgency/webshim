@@ -125,7 +125,7 @@ if (!document.createElement('canvas').getContext) {
 	  //webshims lib modification
 		var that = this;
 		setTimeout(function(){
-			jQuery.webshims.ready('DOM', bind(that.init_, that, doc));
+			jQuery(bind(that.init_, that, doc));
 		}, 0);
     },
 
@@ -1421,5 +1421,35 @@ if (!document.createElement('canvas').getContext) {
   CanvasPattern = CanvasPattern_;
   DOMException = DOMException_;
 })();
-
+/*
+*webshims-Extensions 
+*/
+jQuery.webshims.ready('es5', function($, webshims, window, doc){
+	if (!doc.styleSheets || !doc.namespaces){
+		return;
+	}
+	
+	webshims.defineNodeNameProperty('canvas', 'getContext', {
+		value: function(ctxName){
+			if(!this.getContext){
+				G_vmlCanvasManager.initElement(this);
+			}
+			return this.getContext(ctxName);
+		}
+	});
+			
+	webshims.addReady(function(context, elem){
+		if(doc === context){return;}
+		$('canvas', context).add(elem.filter('canvas')).each(function(){
+			if(!this.getContext){
+				G_vmlCanvasManager.initElement(this);
+			}
+		});
+	});
+	$(function(){
+		setTimeout(function(){
+			webshims.createReadyEvent('canvas');
+		}, 9);
+	});
+});
 } // if

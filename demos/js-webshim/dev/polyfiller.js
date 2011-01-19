@@ -594,7 +594,6 @@
 				var initProps = {};
 				var isReady;
 				webshims.addReady(function(context, contextElem){	
-					nodeNameCache = {};
 					$.each(initProps, function(name, props){
 						var elems = $(context.getElementsByTagName(name));
 						if(contextElem[0] && $.nodeName(contextElem[0], name)){
