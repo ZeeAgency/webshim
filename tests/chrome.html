@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>interactive validation</title>
+		<script>
+			document.addEventListener('submit', function(e){
+				console.log("submit event was triggered, but shouldn't");
+				e.preventDefault();
+			}, true);
+		</script>
+	</head>
+	<body>
+		
+		<h1>preventDefault</h1>
+		<form action="#" id="prevent">
+			<input required name="b" placeholder="leave empty for test" />
+			<input type="submit" />
+		</form>
+		<script>
+			document.getElementById('prevent').addEventListener('invalid', function(e){
+				console.log("invalid event was defaultPrevented, you shouldn't see a validation bubble or submit event");
+				e.preventDefault();
+			}, true);
+		</script>
+	</body>
+</html>
